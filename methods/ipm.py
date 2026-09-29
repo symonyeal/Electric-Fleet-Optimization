@@ -9,12 +9,16 @@ path is
 Eliminating dz, dw, dv leaves the quasi-definite system (Vanderbei Ch. 19)
     [ -(Q + D + dp I)   A'   ] [dx]   [rho]      D = X^-1 Z + W^-1 V,
     [  A                dd I ] [dy] = [ rp].     rho = rd - X^-1 rxz + W^-1 (rwv - V ru).
+For an LP, H = D + dp I is diagonal and the normal equations
+    (A H^-1 A' + dd I) dy = rp + A H^-1 rho,    dx = H^-1 (A'dy - rho)
+are m x m: a dense Cholesky costs O(m^3 + m^2 n) against a sparse LU of order m + n.
 """
 
 import time
 
 import numpy as np
 import scipy.sparse as sp
+from scipy.linalg import LinAlgError, cho_factor, cho_solve
 from scipy.sparse.linalg import splu
 
 
@@ -66,7 +70,7 @@ def _step(v, dv, eta):
 
 
 def ipm(c, A, b, l, u, Q=None, eps=1e-8, delta=None, sigma=0.1, eta=0.9995, kmax=200,
-        dp=1e-10, dd=1e-10, trace=False):
+        dp=1e-10, dd=1e-10, kkt=None, trace=False):
     """Primal-dual path following.
 
     INPUT   c, A, b, l, u, Q .. problem data (A, Q sparse or dense; Q convex)
@@ -74,6 +78,7 @@ def ipm(c, A, b, l, u, Q=None, eps=1e-8, delta=None, sigma=0.1, eta=0.9995, kmax
             delta ........... stop early once residuals meet eps and the relative gap delta
             sigma, eta ...... centering parameter, fraction to the boundary
             dp, dd .......... primal and dual regularization of the Newton system
+            kkt ............. "normal" or "augmented"; default normal for LPs with m <= 3000
     OUTPUT  x, y, a (= c + Qx - A'y), f (objective), L (bound A3/A5), status (optimal,
             feasible_limit, limit, numerical), k, err (primal, dual, gap), stats, trace.
             Cost per iteration: one sparse LU of the (n + m) quasi-definite matrix.
@@ -97,7 +102,9 @@ def ipm(c, A, b, l, u, Q=None, eps=1e-8, delta=None, sigma=0.1, eta=0.9995, kmax
     w = np.where(B, U - x, 1.0)
     z, v, y = 1 / x, np.where(B, 1 / w, 0.0), np.zeros(m)
     nb = max(n + B.sum(), 1)
-    st = dict(m=m, n=N, n_free=n, reg=(dp, dd), t_factor=0.0, t_solve=0.0)
+    kkt = kkt or ("normal" if not qp and m <= 3000 else "augmented")
+    st = dict(m=m, n=N, n_free=n, reg=(dp, dd), kkt=kkt, t_factor=0.0, t_solve=0.0,
+              fallback=0)
     tr, status = [], "limit"
 
     def xs(x):                                          # restore fixed and shifted x
@@ -133,13 +140,26 @@ def ipm(c, A, b, l, u, Q=None, eps=1e-8, delta=None, sigma=0.1, eta=0.9995, kmax
         Wi = np.where(B, 1 / np.where(B, w, 1.0), 0.0)
         D = z / x + Wi * v
         rho = rd - rxz / x + Wi * (rwv - v * ru)
-        K = sp.block_array([[-(Q1 + sp.diags_array(D + dp)), A1.T],
-                            [A1, sp.diags_array(np.full(m, dd))]], format="csc")
-        t = time.perf_counter()
-        F = splu(K)
-        st["t_factor"] += time.perf_counter() - t
-        t = time.perf_counter()
-        d = F.solve(np.r_[rho, rp])
+        t, d = time.perf_counter(), None
+        if kkt == "normal":
+            Hi = 1 / (D + dp)
+            M = (A1 @ sp.diags_array(Hi) @ A1.T).toarray() + dd * np.eye(m)
+            try:                                        # a numerical failure falls back
+                F = cho_factor(M)
+                st["t_factor"] += time.perf_counter() - t
+                t = time.perf_counter()
+                dy = cho_solve(F, rp + A1 @ (Hi * rho))
+                d = np.r_[Hi * (A1.T @ dy - rho), dy]
+            except LinAlgError:
+                st["fallback"] += 1
+        if d is None:
+            K = sp.block_array([[-(Q1 + sp.diags_array(D + dp)), A1.T],
+                                [A1, sp.diags_array(np.full(m, dd))]], format="csc")
+            F = splu(K)
+            st["t_factor"] += time.perf_counter() - t
+            t = time.perf_counter()
+            d = F.solve(np.r_[rho, rp])
+            st.update(nnz_K=K.nnz, nnz_LU=F.L.nnz + F.U.nnz)
         st["t_solve"] += time.perf_counter() - t
         dx, dy = d[:n], d[n:]
         dz = (rxz - z * dx) / x
@@ -151,8 +171,8 @@ def ipm(c, A, b, l, u, Q=None, eps=1e-8, delta=None, sigma=0.1, eta=0.9995, kmax
             tp = td = min(tp, td)
         x, w = x + tp * dx, np.where(B, w + tp * dw, 1.0)
         y, z, v = y + td * dy, z + td * dz, np.where(B, v + td * dv, 0.0)
-    if k:
-        st.update(nnz_K=K.nnz, nnz_LU=F.L.nnz + F.U.nnz)
+    if kkt == "normal":
+        st.update(nnz_factor=m * (m + 1) // 2)
     X = xs(x)
     return dict(x=X, y=y, a=c + Q @ X - A.T @ y, f=c @ X + X @ (Q @ X) / 2,
                 L=bound(c, Q, A, b, l, u, X, y), status=status, k=k, err=err, stats=st,
