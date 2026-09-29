@@ -24,9 +24,11 @@ REPORT = {"E-n22-k4": 384.678035, "E-n23-k3": 573.130948, "E-n30-k3": 511.253921
 EVRP_PYTHON = {"E-n22-k4": 384.67, "E-n23-k3": 571.94, "E-n30-k3": 509.47,
                "E-n33-k4": 840.14, "E-n51-k5": 529.90, "E-n76-k7": 692.64,
                "E-n101-k8": 839.29}                 # README best of VNS, SA, GSGA; unreplayed
-CASES = [*[("evrp", n, m, t) for n in E for m, t in (("R0", 1200), ("R1", 1200),
-                                                     ("R2-ipm", 1800), ("R2-simplex", 1800))],
-         ("transit", "route100", "M0", 60), ("transit", "route100", "M1", 1800)]
+CASES = [*[("evrp", n, m, t, ()) for n in E for m, t in (("R0", 600), ("R1", 600),
+                                                         ("R2-ipm", 1800), ("R2-simplex", 1800))],
+         *[("transit", "route100", m, t, u) for u, t in ((("--until", "8"), 600),
+                                                         (("--until", "10"), 900), ((), 1800))
+           for m in ("M0", "M1")]]
 BLUE, ORANGE, AQUA, YELLOW = "#2a78d6", "#eb6834", "#1baf7a", "#eda100"   # validated, dataviz
 INK, INK2, GRID = "#0b0b0b", "#52514e", "#e4e3df"
 
@@ -53,6 +55,33 @@ def bundle(path):
 
 def fmt(x, d=2):
     return "-" if x is None else f"{x:,.{d}f}"
+
+
+def best(n):
+    """The shortest replayed routes of instance n among all bundles: (length, routes, file)."""
+    from checks.route import read_routes, replay
+    from data.evrp import load
+    p, b = load(f"evrp-2019/{n}"), None
+    for f in sorted([*(OUT / "evrp").glob(f"{n}-*.routes"),
+                     *(OUT / "baseline").glob(f"{n}-*.routes")]):
+        R = read_routes(f)
+        rp = replay(p, R)
+        if rp["ok"] and (b is None or rp["length"] < b[0] - 1e-9):
+            b = (rp["length"], R, f.name)
+    return p, b
+
+
+def runs(p, R):
+    """Segments (between customers or the depot) that visit two or more stations in a row
+    (Phase 9, criterion 4; Routing §4: R1 allows them through station paths)."""
+    F = set(p["F"]) - {p["depot"]}
+    k = 0
+    for r in R:
+        run = 0
+        for z in r:
+            run = run + 1 if z - 1 in F else 0
+            k += run == 2
+    return k
 
 
 def verdicts():
@@ -104,13 +133,18 @@ def write_readme():
              "## 2019 E instances (Validation §3, EVRP-06)", "",
              ("L is the best valid lower bound (R1 and R2 dual bounds, and the certified R0 "
              "value, since z(R0) <= z(R1)); U the shortest replayed solution (R1, R2's "
-             "restricted master, GSGA). evrp-python's README values are not replayed."), "",
+             "restricted master, GSGA). evrp-python's README values are not replayed. The "
+             "last column counts segments of U's routes that pass two or more stations in a "
+             "row (Routing §4)."), "",
              ("| Instance | Report value | evrp-python (README) | GSGA replayed | R0 | L | U | "
-             "Gap | Verdict |"), "|---|---:|---:|---:|---:|---:|---:|---:|---|"]
+             "Gap | Verdict | Multi-station segments |"),
+             "|---|---:|---:|---:|---:|---:|---:|---:|---|---:|"]
     for n, Vr, ep, g, r0, L, U, gap, v in V:
+        p, B = best(n)
         lines.append(f"| {n} | {Vr:.6f} | {ep:.2f} | {fmt(g, 6)} | {fmt(r0, 6)} | "
                      f"{fmt(L, 6)} | {fmt(U, 6)} | "
-                     f"{'-' if gap is None else f'{100 * gap:.3f}%'} | {v} |")
+                     f"{'-' if gap is None else f'{100 * gap:.3f}%'} | {v} | "
+                     f"{'-' if B is None else runs(p, B[1])} |")
     D = duals()
     lines += ["", "## Interior versus simplex duals in R2 (CG-04)", "",
               ("| Instance | Iterations (IPM / simplex) | Pricing calls | Seconds | Bound "
@@ -220,8 +254,6 @@ def figures():
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     from matplotlib.patches import Patch
-    from data.evrp import load
-    from checks.route import read_routes, replay
     from checks.schedule import replay_energy
     plt.rcParams.update({"font.size": 9, "axes.edgecolor": INK2, "axes.labelcolor": INK2,
                          "xtick.color": INK2, "ytick.color": INK2, "axes.grid": True,
@@ -229,28 +261,21 @@ def figures():
                          "axes.spines.right": False, "figure.facecolor": "#fcfcfb",
                          "axes.facecolor": "#fcfcfb"})
     (OUT / "fig").mkdir(parents=True, exist_ok=True)
-    p = load("evrp-2019/E-n22-k4")
-    best = None
-    for f in sorted([*(OUT / "evrp").glob("E-n22-k4-*.routes"),
-                     *(OUT / "baseline").glob("E-n22-k4-*.routes")]):
-        R = read_routes(f)
-        rp = replay(p, R)
-        if rp["ok"] and (best is None or rp["length"] < best[0] - 1e-9):
-            best = (rp["length"], R, f.name)
-    if best:
+    p, B = best("E-n22-k4")
+    if B:
         fig, ax = plt.subplots(figsize=(6, 5.2))
         X = p["X"]
         ax.scatter(*X[p["I"]].T, s=18, color=INK2, zorder=3, label="customer")
         ax.scatter(*X[p["F"]].T, s=40, marker="^", color=INK, zorder=3, label="station")
         ax.scatter(*X[[p["depot"]]].T, s=60, marker="s", color=INK, zorder=4, label="depot")
-        for k, r in enumerate(best[1]):
+        for k, r in enumerate(B[1]):
             v = np.array([X[z - 1] for z in r])
             col = [BLUE, ORANGE, AQUA, YELLOW][k % 4]
             ax.plot(*v.T, color=col, lw=2, zorder=2)
             far = v[np.argmax(((v - X[p["depot"]]) ** 2).sum(1))]
             ax.annotate(f"route {k + 1}", far, xytext=(4, 4), textcoords="offset points",
                         color=INK, fontsize=8)
-        ax.set_title(f"E-n22-k4: shortest replayed solution, length {best[0]:.6f}",
+        ax.set_title(f"E-n22-k4: shortest replayed solution, length {B[0]:.6f}",
                      color=INK, loc="left")
         ax.set_aspect("equal")
         ax.legend(frameon=False, loc="lower left", fontsize=8)
@@ -313,45 +338,43 @@ def figures():
                                      gridspec_kw=dict(height_ratios=(3, 2)))
     else:
         fig, a1 = plt.subplots(figsize=(9, 3.6))
-    low = min(range(n), key=lambda k: min(e for _, e in rp["trace"][k]))
+    kwh = [sum(sum(b["plan"].get(t, {}).values()) for t in d) for d in b["duties"]]
+    top = max(range(n), key=lambda k: kwh[k])
     for k, tr in enumerate(rp["trace"]):
-        if k != low:
-            a1.plot([t / 3600 for t, _ in tr], [e for _, e in tr], color="#b7b5ae", lw=1)
-    tr = rp["trace"][low]
-    a1.plot([t / 3600 for t, _ in tr], [e for _, e in tr], color=BLUE, lw=2)
-    t_, e_ = min(tr, key=lambda z: z[1])
-    a1.annotate(f"bus {low + 1}, lowest: {e_:.0f} kWh", (t_ / 3600, e_), xytext=(-6, -3),
-                textcoords="offset points", ha="right", va="top", color=INK, fontsize=8)
+        a1.plot([t / 3600 for t, _ in tr], [e for _, e in tr], color=BLUE if k == top else
+                "#b7b5ae", lw=2 if k == top else 1, zorder=3 if k == top else 2)
     a1.axhline(v["battery"]["reserve"] * B, color=INK2, lw=1, ls="--")
     a1.text(a1.get_xlim()[0], v["battery"]["reserve"] * B, " reserve", va="bottom", color=INK2,
             fontsize=8)
     a1.set_ylabel("battery energy, kWh")
-    a1.set_title(f"{TRANSIT[tag]}, M1 replayed: energy per bus (gray; lowest in blue)"
-                 + (" and site power" if rp["load"] else "; no bus charges in this window"),
+    who = f"bus {top + 1}, which charges most, in blue" if kwh[top] else "gray"
+    a1.set_title(f"{TRANSIT[tag]}, M1 replayed: energy per bus ({who})"
+                 + ("" if rp["load"] else "; no bus charges in this window"),
                  color=INK, loc="left")
     if not rp["load"]:
         a1.set_xlabel("hour of the service day")
-    for s, col in zip(v["sites"], (ORANGE, AQUA), strict=False):
-        if not rp["load"]:
-            break
-        S = sorted((k[1], g) for k, (_, g) in rp["load"].items() if k[0] == s)
-        if S:
-            x = [z for s_, _ in S for z in (s_ * dl / 3600, (s_ + 1) * dl / 3600)]
-            y = [g for _, g in S for _ in (0, 1)]
-            a2.plot(x, y, color=col, lw=2, label=s)
-    if rp["load"]:
+    else:
+        lo, hi = min(k[1] for k in rp["load"]), max(k[1] for k in rp["load"])
+        Z = [s for s in v["sites"] if any(k[0] == s for k in rp["load"])]
+        for s in Z:
+            col = (ORANGE, AQUA)[list(v["sites"]).index(s)]
+            y = [rp["load"].get((s, s_), (0, 0.0))[1] for s_ in range(lo, hi + 1)]
+            a2.step([s_ * dl / 3600 for s_ in range(lo, hi + 2)], [*y, y[-1]], where="post",
+                    color=col, lw=1.5, label=s)
         a2.set_ylabel("grid power, kW")
         a2.set_xlabel("hour of the service day")
-        a2.legend(frameon=False, fontsize=8)
+        if len(Z) > 1:
+            a2.legend(frameon=False, fontsize=8)
+        else:
+            a2.set_title(f"charging power drawn at {Z[0]}", color=INK2, loc="left", fontsize=9)
     fig.tight_layout()
     fig.savefig(OUT / "fig" / f"energy-{tag}.png", dpi=150)
     plt.close(fig)
 
 
 def run():
-    for track, n, m, t in CASES:
-        extra = ["--until", "8"] if track == "transit" and m == "M1" else []
-        subprocess.run([sys.executable, "run_case.py", track, n, m, "--time", str(t), *extra],
+    for track, n, m, t, u in CASES:
+        subprocess.run([sys.executable, "run_case.py", track, n, m, "--time", str(t), *u],
                        check=False)
 
 
