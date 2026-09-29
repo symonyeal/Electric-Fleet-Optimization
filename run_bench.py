@@ -31,6 +31,21 @@ BLUE, ORANGE, AQUA, YELLOW = "#2a78d6", "#eb6834", "#1baf7a", "#eda100"   # vali
 INK, INK2, GRID = "#0b0b0b", "#52514e", "#e4e3df"
 
 
+TRANSIT = {"route100": "Route 100, full day", "route100-until10h": "Route 100 to 10:00",
+           "route100-until8h": "Route 100 to 08:00"}
+
+
+def transit(tag):
+    """The M1 bundle of a Route 100 window, its corridor and its scenario."""
+    from data.scenario import load
+    with open("tests/fixtures/route100.json", encoding="utf-8") as f:
+        c = json.load(f)
+    if tag != "route100":
+        h = int(tag.removeprefix("route100-until").removesuffix("h"))
+        c = dict(c, trips=[t for t in c["trips"] if t["dep"] < h * 3600])
+    return bundle(OUT / "transit" / f"{tag}-M1.json"), c, load("data/scenarios/route100.toml")[0]
+
+
 def bundle(path):
     p = Path(path)
     return json.loads(p.read_text(encoding="utf-8")) if p.exists() else None
@@ -115,17 +130,24 @@ def write_readme():
     G = bundle(OUT / "grid" / "grid.json")
     if G:
         lines += ["", "## Charging physics (OA-04)", "",
-                  ("Each row fixes the loss coefficient alpha; M2 and R3 are certified by outer "
-                  "approximation, M1 and R1 by HiGHS, on the same instance."), "",
-                  "| Model pair | Instance | alpha | Without loss | With loss | Increase |",
-                  "|---|---|---:|---:|---:|---:|"]
+                  ("Each row fixes the loss coefficient alpha (illustrative). M2 and R3 are "
+                  "solved by outer approximation, M1 and R1 by HiGHS, on the same instance. "
+                  "M2 against M1 compares cost; R3 against R1 compares the replayed route "
+                  "length, since R3 also prices energy and dwell time."), "",
+                  ("| Model pair | Instance | Measure | alpha | Without | With | Increase | "
+                   "Status |"),
+                  "|---|---|---|---:|---:|---:|---:|---|"]
         for g in G:
             inc = None if g["base"] is None or g["loss"] is None else g["loss"] - g["base"]
-            lines.append(f"| {g['pair']} | {g['instance']} | {g['alpha']:g} | "
-                         f"{fmt(g['base'], 3)} | {fmt(g['loss'], 3)} | {fmt(inc, 3)} |")
+            lines.append(f"| {g['pair']} | {g['instance']} | {g['measure']} | {g['alpha']:g} | "
+                         f"{fmt(g['base'], 3)} | {fmt(g['loss'], 3)} | {fmt(inc, 3)} | "
+                         f"{g['status']} |")
     lines += ["", "## Figures", "", "![E-n22-k4](fig/routes-E-n22-k4.png)", "",
-              "![R2 duals](fig/r2-duals-E-n22-k4.png)", "",
-              "![Route 100 timeline](fig/timeline-route100-until8h.png)", ""]
+              "![R2 duals](fig/r2-duals-E-n22-k4.png)", ""]
+    tag = next((t for t in TRANSIT if bundle(OUT / "transit" / f"{t}-M1.json")), None)
+    if tag:
+        lines += [f"![{TRANSIT[tag]} timeline](fig/timeline-{tag}.png)", "",
+                  f"![{TRANSIT[tag]} energy](fig/energy-{tag}.png)", ""]
     (OUT / "README.md").write_text("\n".join(lines), encoding="utf-8")
 
 
@@ -133,8 +155,10 @@ def figures():
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
+    from matplotlib.patches import Patch
     from data.evrp import load
     from checks.route import read_routes, replay
+    from checks.schedule import replay_energy
     plt.rcParams.update({"font.size": 9, "axes.edgecolor": INK2, "axes.labelcolor": INK2,
                          "xtick.color": INK2, "ytick.color": INK2, "axes.grid": True,
                          "grid.color": GRID, "grid.linewidth": 0.6, "axes.spines.top": False,
@@ -191,31 +215,73 @@ def figures():
     fig.tight_layout()
     fig.savefig(OUT / "fig" / "r2-duals-E-n22-k4.png", dpi=150)
     plt.close(fig)
-    b = bundle(OUT / "transit" / "route100-until8h-M1.json")
-    if b and b.get("duties"):
-        with open("tests/fixtures/route100.json", encoding="utf-8") as f:
-            T = {t["id"]: t for t in json.load(f)["trips"]}
-        fig, ax = plt.subplots(figsize=(9, 4.2))
-        for k, d in enumerate(b["duties"]):
-            for tid in d:
-                t = T[tid]
-                ax.barh(k, (t["arr"] - t["dep"]) / 3600, left=t["dep"] / 3600, height=0.6,
-                        color=BLUE, edgecolor="#fcfcfb", linewidth=1)
-                for s in (b["plan"] or {}).get(tid, {}):
-                    ax.barh(k, 300 / 3600, left=int(s) * 300 / 3600, height=0.6, color=ORANGE,
-                            edgecolor="#fcfcfb", linewidth=1)
-        ax.set_yticks(range(len(b["duties"])), [f"bus {k + 1}" for k in range(len(b["duties"]))],
-                      fontsize=7)
-        ax.invert_yaxis()
-        ax.set_xlabel("hour of the service day")
-        ax.bar(0, 0, color=BLUE, label="trip")
-        ax.bar(0, 0, color=ORANGE, label="charging slot")
-        ax.legend(frameon=False, fontsize=8, loc="lower right")
-        ax.set_title("Route 100 to 08:00, M1: buses, trips and charging (illustrative scenario)",
-                     color=INK, loc="left")
-        fig.tight_layout()
-        fig.savefig(OUT / "fig" / "timeline-route100-until8h.png", dpi=150)
-        plt.close(fig)
+    tag = next((t for t in TRANSIT if bundle(OUT / "transit" / f"{t}-M1.json")), None)
+    if tag is None:
+        return
+    b, c, v = transit(tag)
+    T = {t["id"]: t for t in c["trips"]}
+    dl, n = v["time"]["delta"], len(b["duties"])
+    fig, ax = plt.subplots(figsize=(9, 1.4 + 0.2 * n))
+    for k, d in enumerate(b["duties"]):
+        for tid in d:
+            t = T[tid]
+            ax.barh(k, (t["arr"] - t["dep"]) / 3600, left=t["dep"] / 3600, height=0.6,
+                    color=BLUE, edgecolor="#fcfcfb", linewidth=1)
+            for s_ in b["plan"].get(tid, {}):
+                ax.barh(k, dl / 3600, left=int(s_) * dl / 3600, height=0.6, color=ORANGE,
+                        edgecolor="#fcfcfb", linewidth=1)
+    ax.set_yticks(range(n), [f"bus {k + 1}" for k in range(n)], fontsize=7)
+    ax.margins(x=0.01)
+    ax.invert_yaxis()
+    ax.set_xlabel("hour of the service day")
+    ax.legend([Patch(color=BLUE), Patch(color=ORANGE)], ["trip", "charging slot"], ncol=2,
+              frameon=False, fontsize=8, loc="lower right", bbox_to_anchor=(1, 1))
+    ax.set_title(f"{TRANSIT[tag]}, M1: buses, trips and charging (illustrative scenario)",
+                 color=INK, loc="left")
+    fig.tight_layout()
+    fig.savefig(OUT / "fig" / f"timeline-{tag}.png", dpi=150)
+    plt.close(fig)
+    rp = replay_energy(c, v, b["duties"], {k: {int(s_): kw for s_, kw in d.items()}
+                                           for k, d in b["plan"].items()}, b["infra"])
+    B = v["battery"]["B"]
+    if rp["load"]:
+        fig, (a1, a2) = plt.subplots(2, 1, figsize=(9, 5.6), sharex=True,
+                                     gridspec_kw=dict(height_ratios=(3, 2)))
+    else:
+        fig, a1 = plt.subplots(figsize=(9, 3.6))
+    low = min(range(n), key=lambda k: min(e for _, e in rp["trace"][k]))
+    for k, tr in enumerate(rp["trace"]):
+        if k != low:
+            a1.plot([t / 3600 for t, _ in tr], [e for _, e in tr], color="#b7b5ae", lw=1)
+    tr = rp["trace"][low]
+    a1.plot([t / 3600 for t, _ in tr], [e for _, e in tr], color=BLUE, lw=2)
+    t_, e_ = min(tr, key=lambda z: z[1])
+    a1.annotate(f"bus {low + 1}, lowest: {e_:.0f} kWh", (t_ / 3600, e_), xytext=(-6, -3),
+                textcoords="offset points", ha="right", va="top", color=INK, fontsize=8)
+    a1.axhline(v["battery"]["reserve"] * B, color=INK2, lw=1, ls="--")
+    a1.text(a1.get_xlim()[0], v["battery"]["reserve"] * B, " reserve", va="bottom", color=INK2,
+            fontsize=8)
+    a1.set_ylabel("battery energy, kWh")
+    a1.set_title(f"{TRANSIT[tag]}, M1 replayed: energy per bus (gray; lowest in blue)"
+                 + (" and site power" if rp["load"] else "; no bus charges in this window"),
+                 color=INK, loc="left")
+    if not rp["load"]:
+        a1.set_xlabel("hour of the service day")
+    for s, col in zip(v["sites"], (ORANGE, AQUA), strict=False):
+        if not rp["load"]:
+            break
+        S = sorted((k[1], g) for k, (_, g) in rp["load"].items() if k[0] == s)
+        if S:
+            x = [z for s_, _ in S for z in (s_ * dl / 3600, (s_ + 1) * dl / 3600)]
+            y = [g for _, g in S for _ in (0, 1)]
+            a2.plot(x, y, color=col, lw=2, label=s)
+    if rp["load"]:
+        a2.set_ylabel("grid power, kW")
+        a2.set_xlabel("hour of the service day")
+        a2.legend(frameon=False, fontsize=8)
+    fig.tight_layout()
+    fig.savefig(OUT / "fig" / f"energy-{tag}.png", dpi=150)
+    plt.close(fig)
 
 
 def run():
@@ -228,6 +294,7 @@ def run():
 def grid():
     """OA-04: M2 against M1 on Route 100 before 06:30, R3 against R1 on an E-n22-k4
     sub-instance, over a declared grid of loss coefficients (illustrative)."""
+    from checks.route import replay_charge
     from data.evrp import load, sub
     from data.scenario import load as scenario
     from models.charge import m2
@@ -246,8 +313,9 @@ def grid():
         w = copy.deepcopy(v0)
         w["charger"]["alpha"] = a
         r = m2(c, w, name="route100-until6.5h", max_iter=40, time_limit=1800)
-        out.append(dict(pair="M2 / M1", instance="route100 before 06:30", alpha=a, base=base,
-                        loss=r["U"] if r["status"] == "optimal" else None, status=r["status"]))
+        out.append(dict(pair="M2 / M1", instance="route100 before 06:30", measure="cost",
+                        alpha=a, base=base, loss=r["U"] if r["status"] == "optimal" else None,
+                        status=r["status"]))
     p = load("evrp-2019/E-n22-k4")
     q = sub(p, sorted(p["I"], key=lambda i: -p["D"][p["depot"], i])[:8], p["F"])
     sc, _ = scenario("data/scenarios/r3.toml")
@@ -256,8 +324,12 @@ def grid():
         s = copy.deepcopy(sc)
         s["charger"]["alpha"] = a
         r = r3(q, s, max_iter=60, time_limit=1800)
-        out.append(dict(pair="R3 / R1 (distance)", instance=q["name"], alpha=a, base=zr1,
-                        loss=r["U"] if r["status"] == "optimal" else None, status=r["status"]))
+        z = None
+        if r["status"] == "optimal":
+            z = replay_charge(q, s, r["routes"], {tuple(map(int, k.split(":"))): qt
+                                                  for k, qt in r["charges"].items()})["length"]
+        out.append(dict(pair="R3 / R1", instance=q["name"], measure="route length", alpha=a,
+                        base=zr1, loss=z, cost=r["U"], status=r["status"]))
     (OUT / "grid").mkdir(parents=True, exist_ok=True)
     (OUT / "grid" / "grid.json").write_text(json.dumps(out, indent=1), encoding="utf-8")
 

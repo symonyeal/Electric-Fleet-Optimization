@@ -2,6 +2,7 @@
 # the Route 100 morning, its LP relaxation by the textbook IPM, and the educational tree.
 
 import copy
+import itertools
 import json
 
 import numpy as np
@@ -57,6 +58,21 @@ def test_replay_finds_missing_charge():
     plan = {k: s for k, s in r["plan"].items() if k not in long[0][1:]}
     rp = replay_energy(c, v, r["duties"], plan, r["infra"])
     assert not rp["ok"] and any(k == "energy" for k, _ in rp["defects"])
+
+
+def test_replay_traces_energy_and_site_power():
+    """The traces drawn in the results are the replay's, not the solver's."""
+    c, v = tiny(1)
+    r = m1(c, v, fixed={"A": dict(n=1, h=500.0)})
+    rp = replay_energy(c, v, r["duties"], r["plan"], r["infra"])
+    b = v["battery"]
+    assert len(rp["trace"]) == r["fleet"]
+    for tr in rp["trace"]:
+        assert tr[0][1] == pytest.approx(b["s0"] * b["B"])
+        assert min(e for _, e in tr) >= b["reserve"] * b["B"] - 1e-6
+        assert all(s <= t for (s, _), (t, _) in itertools.pairwise(tr))
+    kw = sum(k for d in r["plan"].values() for k in d.values())
+    assert sum(g for _, g in rp["load"].values()) == pytest.approx(kw / v["charger"]["eta"])
 
 
 def morning(until=8 * 3600):

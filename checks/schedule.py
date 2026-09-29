@@ -47,7 +47,9 @@ def replay_energy(c, v, duties, plan, infra, tol=1e-6, loss=False):
     INPUT   duties .. trip ids per bus; plan .. {trip id: {slot: battery kW}} charged before
             that trip at its first stop; infra .. {site: dict(n=plugs, h=kW upgrade)}
             loss .... grid power p/eta + alpha p^2 (10), and the taper p <= P (1 - e/B) (11)
-    OUTPUT  ok, defects, cost (recomputed from the schedule alone), parts, fleet.
+    OUTPUT  ok, defects, cost (recomputed from the schedule alone), parts, fleet,
+            trace ... per bus, the points (seconds, kWh) where its energy changes
+            load .... {(site, slot): (buses charging, grid kW)}
             Kinds: those of replay(), energy, overcharge, window, presence, power, site, plugs,
             grid, taper.
     """
@@ -60,12 +62,15 @@ def replay_energy(c, v, duties, plan, infra, tol=1e-6, loss=False):
     rB, top, s0B, h = b["reserve"] * B, b["smax"] * B, b["s0"] * B, dl / 3600
     depot = dict(lat=v["depot"]["lat"], lon=v["depot"]["lon"])
     site = {stop: s for s, d in v["sites"].items() for stop in d["stops"]}
-    use, km_dh, kwh, restore = {}, 0.0, 0.0, 0.0
+    use, km_dh, kwh, restore, trace = {}, 0.0, 0.0, 0.0, []
     for d in duties:
         if any(k not in T for k in d):
             continue
         km = great_circle_km(depot, S[T[d[0]]["first"]]) * det
         km_dh, e, here = km_dh + km, s0B - kap * km, None
+        t0 = min([s_ * dl for s_ in plan.get(d[0], {})] + [T[d[0]]["dep"]])
+        t0 -= 3600 * km / v["deadhead"]["speed"]
+        tr = [(t0, s0B), (t0 + 3600 * km / v["deadhead"]["speed"], e)]
         if e < rB - tol:
             D.append(("energy", f"pull-out to {d[0]} arrives with {e:.6g}"))
         for q, k in enumerate(d):
@@ -81,7 +86,9 @@ def replay_energy(c, v, duties, plan, infra, tol=1e-6, loss=False):
                     D.append(("presence", f"{k} slot {s_} before the bus arrives"))
                 if kw > ch["P"] + tol or kw < -tol:
                     D.append(("power", f"{k} slot {s_}: {kw:.6g} kW"))
+                tr.append((s_ * dl, e))
                 e += h * kw
+                tr.append(((s_ + 1) * dl, e))
                 grid = kw / eta + (ch["alpha"] * kw * kw if loss else 0.0)       # (10)
                 if loss and kw > ch["P"] * (1 - e / B) + tol:                    # (11)
                     D.append(("taper", f"{k} slot {s_}: {kw:.6g} kW at {e:.6g} kWh"))
@@ -92,14 +99,18 @@ def replay_energy(c, v, duties, plan, infra, tol=1e-6, loss=False):
                 D.append(("overcharge", f"{k} departs with {e:.6g}"))
             if e - kap * t["km"] < rB - tol:
                 D.append(("energy", f"{k} would end below reserve"))
+            tr.append((t["dep"], e))
             e -= kap * t["km"]
+            tr.append((t["arr"], e))
             nxt = S[T[d[q + 1]]["first"]] if q + 1 < len(d) else depot
             km = great_circle_km(S[t["last"]], nxt) * det
             km_dh, e = km_dh + km, e - kap * km
             here = t["arr"] + 3600 * km / v["deadhead"]["speed"]
+            tr.append((here, e))
             if e < rB - tol:
                 D.append(("energy", f"after {k} the bus reaches its next stop with {e:.6g}"))
         restore += (s0B - e) / eta
+        trace.append(tr)
     peak = {s: v["sites"][s]["L"] for s in infra}
     for (s, s_), (k, kw) in sorted(use.items(), key=lambda z: (str(z[0][0]), z[0][1])):
         if s not in infra:
@@ -116,4 +127,5 @@ def replay_energy(c, v, duties, plan, infra, tol=1e-6, loss=False):
                  plugs=co["plug"] * sum(i["n"] for i in infra.values()),
                  upgrade=co["upgrade"] * sum(i["h"] for i in infra.values()),
                  peak=co["peak"] * sum(peak.values()))
-    return dict(ok=not D, defects=D, cost=sum(parts.values()), parts=parts, fleet=len(duties))
+    return dict(ok=not D, defects=D, cost=sum(parts.values()), parts=parts, fleet=len(duties),
+                trace=trace, load={k: tuple(u) for k, u in use.items()})
