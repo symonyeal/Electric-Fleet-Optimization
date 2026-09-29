@@ -14,6 +14,7 @@ from pathlib import Path
 
 import numpy as np
 
+from checks.certificate import REVISION
 from checks.route import read_routes, replay, write_routes
 from data.evrp import KEYS, load
 from data.scenario import load as scenario
@@ -61,7 +62,8 @@ def transit(x):
     sc = dict(speed=v["deadhead"]["speed"], detour=v["deadhead"]["detour"],
               layover=v["time"]["layover"])
     if x.model == "M0":
-        r = dict(model="M0", instance=name, trips=len(c["trips"]), **m0(c, sc))
+        r = dict(model="M0", instance=name, trips=len(c["trips"]), **m0(c, sc),
+                 provenance=dict(revision=REVISION, sha256=c.get("source", {}).get("sha256")))
     else:
         r = m1(c, v, name=name, time_limit=x.time)
     r["scenario"] = {k: list(u) for k, u in prov.items()}

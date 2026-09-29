@@ -51,3 +51,16 @@ def test_record_requires_solver_time_and_provenance():
         record("R1", "x", "optimal", U=1.0, L=1.0)
     r = record("R1", "x", "optimal", U=1.0, L=1.0, **KW)
     assert r["solver"] == KW["solver"] and r["elapsed"] == 0.5 and r["provenance"]["revision"]
+
+
+def test_revision_is_fixed_at_import_and_ignores_results():
+    """A bundle names the code that ran: result files and planning notes are not code."""
+    from pathlib import Path
+    from checks.certificate import REVISION, revision
+    f = Path("docs/results/_probe.json")
+    f.write_text("{}", encoding="utf-8")
+    try:
+        assert revision() == REVISION or not REVISION.endswith("+dirty")
+        assert revision().endswith("+dirty") == REVISION.endswith("+dirty")
+    finally:
+        f.unlink()
