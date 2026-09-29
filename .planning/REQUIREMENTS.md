@@ -9,21 +9,21 @@ Formulation labels (R1.3, (A3), (7), ...) refer to `docs/ROUTING.md`, `docs/MODE
 
 ### Foundations
 
-- [ ] **FND-01**: User can install the project into the system Python 3.14 from `requirements.txt` and get `pytest`, `ruff check`, and `pip check` passing
-- [ ] **FND-02**: User can read a toolchain note stating the installed SciPy/HiGHS versions and whether `milp`, `highs-ipm` (including duals before crossover), and `trust-constr` behave as documented on Python 3.14/Windows
-- [ ] **FND-03**: Every solve returns a result record with the status taxonomy of Algorithms §8, the solver's own code and message, U, L, a gap only when both are valid, residuals, elapsed time, and provenance
-- [ ] **FND-04**: A GitHub Actions workflow runs `pytest` and `ruff` on committed fixtures for every push to `main`
+- [x] **FND-01**: User can install the project into the system Python 3.14 from `requirements.txt` and get `pytest`, `ruff check`, and `pip check` passing
+- [x] **FND-02**: User can read a toolchain note stating the installed SciPy/HiGHS versions and whether `milp`, `highs-ipm` (including duals before crossover), and `trust-constr` behave as documented on Python 3.14/Windows
+- [x] **FND-03**: Every solve returns a result record with the status taxonomy of Algorithms §8, the solver's own code and message, U, L, a gap only when both are valid, residuals, elapsed time, and provenance
+- [x] **FND-04**: A GitHub Actions workflow runs `pytest` and `ruff` on committed fixtures for every push to `main`
 
 ### Data
 
-- [ ] **DATA-01**: User can fetch the 41 EVRP files from the pinned evrp-python commit, and every read verifies the file's SHA-256 against the committed manifest
-- [ ] **DATA-02**: The EVRP reader parses both header variants by keyword, checks every section count, and rejects any other edge-weight type
-- [ ] **DATA-03**: The textbook chapter references in `docs/SOURCES.md` are checked against both tables of contents and corrected where they differ
+- [x] **DATA-01**: User can fetch the 41 EVRP files from the pinned evrp-python commit, and every read verifies the file's SHA-256 against the committed manifest
+- [x] **DATA-02**: The EVRP reader parses both header variants by keyword, checks every section count, and rejects any other edge-weight type
+- [x] **DATA-03**: The textbook chapter references in `docs/SOURCES.md` are checked against both tables of contents and corrected where they differ
 
 ### Checks
 
-- [ ] **CHK-01**: User can replay any route file against an instance and receive coverage, load, battery (depot legs included), station and depot resets, the route count, and the length recomputed from coordinates
-- [ ] **CHK-02**: User can convert evrp-python's printed tours (0-based identifiers) into the exchange format and replay them
+- [x] **CHK-01**: User can replay any route file against an instance and receive coverage, load, battery (depot legs included), station and depot resets, the route count, and the length recomputed from coordinates
+- [x] **CHK-02**: User can convert evrp-python's printed tours (0-based identifiers) into the exchange format and replay them
 
 ### Interior-point core
 
@@ -127,15 +127,15 @@ Formulation labels (R1.3, (A3), (7), ...) refer to `docs/ROUTING.md`, `docs/MODE
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| FND-01 | Phase 1 | Pending |
-| FND-02 | Phase 1 | Pending |
-| FND-03 | Phase 1 | Pending |
-| FND-04 | Phase 1 | Pending |
-| DATA-01 | Phase 1 | Pending |
-| DATA-02 | Phase 1 | Pending |
-| DATA-03 | Phase 1 | Pending |
-| CHK-01 | Phase 1 | Pending |
-| CHK-02 | Phase 1 | Pending |
+| FND-01 | Phase 1 | Complete |
+| FND-02 | Phase 1 | Complete |
+| FND-03 | Phase 1 | Complete |
+| FND-04 | Phase 1 | Complete |
+| DATA-01 | Phase 1 | Complete |
+| DATA-02 | Phase 1 | Complete |
+| DATA-03 | Phase 1 | Complete |
+| CHK-01 | Phase 1 | Complete |
+| CHK-02 | Phase 1 | Complete |
 | IPM-01 | Phase 2 | Pending |
 | IPM-02 | Phase 2 | Pending |
 | IPM-03 | Phase 2 | Pending |
@@ -181,6 +181,7 @@ Formulation labels (R1.3, (A3), (7), ...) refer to `docs/ROUTING.md`, `docs/MODE
 | RPT-03 | Phase 11 | Pending |
 
 **Coverage:**
+
 - v1 requirements: 52 total
 - Mapped to phases: 52
 - Unmapped: 0 ✓
