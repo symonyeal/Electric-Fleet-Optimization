@@ -25,7 +25,7 @@ covered_files:
   - "tests/test_evrp_data.py"
   - "tests/test_route_replay.py"
   - "tests/test_toolchain.py"
-covered_digest: "v1:sha256:c6bbecbf5300c077ba1fc7a066f13a999a7abd8cf585ead8d5b0d767b9e35d1b"
+covered_digest: "v1:sha256:6ec969bcb621ebd3458f2406f48149585e2cff72149ca48cda753f4198129dbe"
 behavior_unverified: 0
 overrides_applied: 0
 gaps:
