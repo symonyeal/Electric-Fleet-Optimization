@@ -1,0 +1,239 @@
+{
+ "model": "R2",
+ "instance": "E-n22-k4",
+ "status": "optimal",
+ "U": 384.6780925829083,
+ "L": 380.5005410452255,
+ "gap_abs": 4.1775515376828025,
+ "gap_rel": 0.010859863398075964,
+ "certified": false,
+ "defect": null,
+ "solver": {
+  "code": null,
+  "message": "converged"
+ },
+ "elapsed": 9.77997149998555,
+ "provenance": {
+  "revision": "eff961f+dirty",
+  "instance": "E-n22-k4",
+  "key": "evrp-2019/E-n22-k4",
+  "sha256": "cc43d4be3c0f6f8435bfa9f1fb60eede083e93ec58313909d5ee7f6a1034a89b",
+  "params": {
+   "duals": "ipm",
+   "nu": 8,
+   "eps": 1e-06,
+   "delta_max": 0.1,
+   "delta_min": 1e-09,
+   "D": 10.0,
+   "labels": 10
+  }
+ },
+ "converged": true,
+ "lp": 380.50054252718394,
+ "iterations": 14,
+ "pricing": 16,
+ "exact_pricing": 2,
+ "columns": 219,
+ "trajectory": [
+  {
+   "k": 1,
+   "f": 384.9192369439471,
+   "L": null,
+   "gap": Infinity,
+   "delta": 0.1,
+   "cols": 53,
+   "exact": false,
+   "master": "feasible_limit",
+   "t": 0.3658461999730207
+  },
+  {
+   "k": 2,
+   "f": 384.6780933020284,
+   "L": null,
+   "gap": Infinity,
+   "delta": 0.1,
+   "cols": 73,
+   "exact": false,
+   "master": "optimal",
+   "t": 0.7125768999685533
+  },
+  {
+   "k": 3,
+   "f": 384.6780945779258,
+   "L": null,
+   "gap": Infinity,
+   "delta": 0.1,
+   "cols": 93,
+   "exact": false,
+   "master": "optimal",
+   "t": 1.0815631999867037
+  },
+  {
+   "k": 4,
+   "f": 384.6780938085023,
+   "L": null,
+   "gap": Infinity,
+   "delta": 0.1,
+   "cols": 113,
+   "exact": false,
+   "master": "optimal",
+   "t": 1.4741861000075005
+  },
+  {
+   "k": 5,
+   "f": 384.6780958527689,
+   "L": null,
+   "gap": Infinity,
+   "delta": 0.1,
+   "cols": 133,
+   "exact": false,
+   "master": "optimal",
+   "t": 1.8108760999748483
+  },
+  {
+   "k": 6,
+   "f": 384.6780945331239,
+   "L": null,
+   "gap": Infinity,
+   "delta": 0.1,
+   "cols": 147,
+   "exact": false,
+   "master": "optimal",
+   "t": 2.157847900001798
+  },
+  {
+   "k": 7,
+   "f": 384.67809394536334,
+   "L": null,
+   "gap": Infinity,
+   "delta": 0.1,
+   "cols": 167,
+   "exact": false,
+   "master": "optimal",
+   "t": 2.5874629999743775
+  },
+  {
+   "k": 8,
+   "f": 382.5920322285636,
+   "L": null,
+   "gap": Infinity,
+   "delta": 0.1,
+   "cols": 187,
+   "exact": false,
+   "master": "optimal",
+   "t": 2.9835094999871217
+  },
+  {
+   "k": 9,
+   "f": 380.5005425090876,
+   "L": null,
+   "gap": Infinity,
+   "delta": 0.1,
+   "cols": 206,
+   "exact": false,
+   "master": "optimal",
+   "t": 3.402457799995318
+  },
+  {
+   "k": 10,
+   "f": 380.5005422331886,
+   "L": null,
+   "gap": Infinity,
+   "delta": 0.1,
+   "cols": 208,
+   "exact": false,
+   "master": "optimal",
+   "t": 3.7960353000089526
+  },
+  {
+   "k": 11,
+   "f": 380.50054313533764,
+   "L": null,
+   "gap": Infinity,
+   "delta": 0.1,
+   "cols": 209,
+   "exact": false,
+   "master": "optimal",
+   "t": 4.201722999976482
+  },
+  {
+   "k": 12,
+   "f": 380.5005415347218,
+   "L": 298.21358089227823,
+   "gap": 0.21569290651964726,
+   "delta": 0.1,
+   "cols": 217,
+   "exact": true,
+   "master": "optimal",
+   "t": 6.534466599987354
+  },
+  {
+   "k": 13,
+   "f": 380.5005442713773,
+   "L": 298.21358089227823,
+   "gap": 0.21569291214579475,
+   "delta": 0.021569290651964727,
+   "cols": 219,
+   "exact": false,
+   "master": "optimal",
+   "t": 6.97561779996613
+  },
+  {
+   "k": 14,
+   "f": 380.50054252718394,
+   "L": 380.5005410452255,
+   "gap": 3.884551391942083e-09,
+   "delta": 0.021569291214579477,
+   "cols": 219,
+   "exact": true,
+   "master": "optimal",
+   "t": 9.750770399987232
+  }
+ ],
+ "routes": [
+  [
+   1,
+   15,
+   22,
+   20,
+   17,
+   1
+  ],
+  [
+   1,
+   18,
+   21,
+   19,
+   16,
+   28,
+   13,
+   1
+  ],
+  [
+   1,
+   9,
+   7,
+   26,
+   4,
+   5,
+   12,
+   14,
+   1
+  ],
+  [
+   1,
+   11,
+   30,
+   2,
+   3,
+   6,
+   8,
+   10,
+   1
+  ]
+ ],
+ "replay": {
+  "ok": true,
+  "defects": []
+ }
+}
