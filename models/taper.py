@@ -17,7 +17,7 @@ from scipy.optimize import Bounds, NonlinearConstraint, linprog, minimize
 
 from methods.branch import split
 from models.charge import fixed_box
-from models.fleet import rows, solution
+from models.fleet import rows, solution, tariff
 import itertools
 
 
@@ -77,10 +77,13 @@ def simulate(S, v, qv):
                 restore += (s0B - e) / eta
     for (s, _), g in peak.items():                                  # grid (6) at the peak
         cons.append(v["sites"][s]["G0"] + S["infra"][s]["h"] - v["sites"][s]["L"] - g)
+    ex, w0, w1 = tariff(co)
     D = {}
-    for (s, _), g in peak.items():
-        D[s] = max(D.get(s, 0.0), v["sites"][s]["L"] + g)
-    cost = co["energy"] * energy + co["depot_energy"] * restore + co["peak"] * sum(D.values())
+    for (s, t), g in peak.items():
+        if w0 <= t * m["D"] % 86400 < w1:                          # billing window (Data §3)
+            D[s] = max(D.get(s, 0.0), v["sites"][s]["L"] + g)
+    cost = ex * (co["energy"] * energy + co["depot_energy"] * restore
+                 + co["peak"] * sum(D.values()))
     return np.array(cons), cost
 
 
@@ -98,7 +101,8 @@ def m3_fixed(c, v, x, fixed=None, starts=5, seed=0):
         km += m["km0"][idx[0]] + m["km1"][idx[-1]] + sum(
             m["km_ij"][km_ij[a, z]] for a, z in itertools.pairwise(idx))
     fixed_cost = (co["F"] * len(S["duties"]) + co["deadhead"] * km
-                  + sum(co["site"] + co["plug"] * f["n"] + co["upgrade"] * f["h"]
+                  + sum(co["site"] + tariff(co)[0] * co.get("basic", 0.0) + co["plug"] * f["n"]
+                        + co["upgrade"] * f["h"]
                         for f in S["infra"].values()))
     lb, ub = fixed_box(M, x)
     A = M["R"].constraint(len(M["c"]))

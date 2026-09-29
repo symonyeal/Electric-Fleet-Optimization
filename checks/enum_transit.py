@@ -33,7 +33,8 @@ def enum_m1(c, v, site, n_plugs, h_up):
     B, kap, eta, P, dl, W = b["B"], b["kappa"], ch["eta"], ch["P"], tm["delta"], tm["window"]
     rB, top, s0B, h = b["reserve"] * B, b["smax"] * B, b["s0"] * B, dl / 3600
     sd = v["sites"][site]
-    fixed = co["site"] + co["plug"] * n_plugs + co["upgrade"] * h_up
+    rho = 1 + co.get("rider", 0.0)                    # the tariff's riders (Data §3)
+    fixed = co["site"] + rho * co.get("basic", 0.0) + co["plug"] * n_plugs + co["upgrade"] * h_up
     best = (math.inf, None)
     for part in partitions(sorted(T, key=lambda k: T[k]["dep"])):
         chains = [sorted(ch_, key=lambda k: T[k]["dep"]) for ch_ in part]
@@ -51,7 +52,10 @@ def enum_m1(c, v, site, n_plugs, h_up):
 def charging(chains, T, B, kap, eta, P, dl, W, rB, top, s0B, h, sd, co, n_plugs, h_up):
     """Least charging, depot-restore and peak cost for fixed chains, or inf if infeasible.
     Variables per trip: departure energy y_j, and per window slot power p and plug u; per chain
-    the end-of-day energy; one peak variable D."""
+    the end-of-day energy; one peak variable D, bounded by the slots of the billing window
+    [peak_from, peak_to) hours only. Every electricity price carries the factor 1 + rider."""
+    rho = 1 + co.get("rider", 0.0)
+    w0, w1 = 3600 * co.get("peak_from", 0.0), 3600 * co.get("peak_to", 24.0)
     cols, lo, hi, integ, cost = {}, [], [], [], []
 
     def var(key, l, u, i=0, c=0.0):
@@ -77,7 +81,7 @@ def charging(chains, T, B, kap, eta, P, dl, W, rB, top, s0B, h, sd, co, n_plugs,
             here = -math.inf if k == 0 else T[ch_[k - 1]]["arr"]
             for s in range(first, math.floor(t["dep"] / dl)):
                 if s * dl >= here:
-                    var(("p", j, s), 0.0, P, 0, co["energy"] * h / eta)
+                    var(("p", j, s), 0.0, P, 0, rho * co["energy"] * h / eta)
                     var(("u", j, s), 0.0, 1.0, 1)
                     row({cols["p", j, s]: 1.0, cols["u", j, s]: -P}, -np.inf, 0.0)
                     slots.setdefault(s, []).append(j)
@@ -94,15 +98,16 @@ def charging(chains, T, B, kap, eta, P, dl, W, rB, top, s0B, h, sd, co, n_plugs,
                 a = {cols["y", i]: 1.0}                # arrival energy >= rB
                 row(a, rB + kap * T[i]["km"], np.inf)
         last = ch_[-1]
-        var(("end", q), 0.0, top, 0, -co["depot_energy"] / eta)
+        var(("end", q), 0.0, top, 0, -rho * co["depot_energy"] / eta)
         row({cols["end", q]: 1.0, cols["y", last]: -1.0}, -kap * T[last]["km"],
             -kap * T[last]["km"])
         row({cols["end", q]: 1.0}, rB, np.inf)
-    var(("D",), 0.0, np.inf, 0, co["peak"])
+    var(("D",), 0.0, np.inf, 0, rho * co["peak"])
     for s, js in slots.items():
         row({cols["u", j, s]: 1.0 for j in js}, -np.inf, n_plugs)
         row({**{cols["p", j, s]: 1 / eta for j in js}}, -np.inf, sd["G0"] + h_up - sd["L"])
-        row({**{cols["p", j, s]: 1 / eta for j in js}, cols["D",]: -1.0}, -np.inf, -sd["L"])
+        if w0 <= s * dl % 86400 < w1:
+            row({**{cols["p", j, s]: 1 / eta for j in js}, cols["D",]: -1.0}, -np.inf, -sd["L"])
     A = np.zeros((len(rows), len(lo)))
     for r, coef in enumerate(rows):
         for k, val in coef.items():
@@ -111,7 +116,7 @@ def charging(chains, T, B, kap, eta, P, dl, W, rB, top, s0B, h, sd, co, n_plugs,
                bounds=Bounds(lo, hi))
     if res.status != 0:
         return math.inf
-    return res.fun + co["depot_energy"] * s0B * len(chains) / eta
+    return res.fun + rho * co["depot_energy"] * s0B * len(chains) / eta
 
 
 def slots_of(cols, j):

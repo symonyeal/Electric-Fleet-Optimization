@@ -52,6 +52,8 @@ def replay_energy(c, v, duties, plan, infra, tol=1e-6, loss=False):
             load .... {(site, slot): (buses charging, grid kW)}
             Kinds: those of replay(), energy, overcharge, window, presence, power, site, plugs,
             grid, taper.
+    The tariff (Data §3): 1 + rider multiplies energy, depot energy, demand and basic charges;
+    demand is the peak over the slots of [peak_from, peak_to) hours of the day.
     """
     base = replay(c, duties, dict(speed=v["deadhead"]["speed"], detour=v["deadhead"]["detour"],
                                   layover=v["time"]["layover"]))
@@ -111,6 +113,8 @@ def replay_energy(c, v, duties, plan, infra, tol=1e-6, loss=False):
                 D.append(("energy", f"after {k} the bus reaches its next stop with {e:.6g}"))
         restore += (s0B - e) / eta
         trace.append(tr)
+    rho = 1 + co.get("rider", 0.0)                   # rate riders on every electricity charge
+    w0, w1 = 3600 * co.get("peak_from", 0.0), 3600 * co.get("peak_to", 24.0)
     peak = {s: v["sites"][s]["L"] for s in infra}
     for (s, s_), (k, kw) in sorted(use.items(), key=lambda z: (str(z[0][0]), z[0][1])):
         if s not in infra:
@@ -120,12 +124,14 @@ def replay_energy(c, v, duties, plan, infra, tol=1e-6, loss=False):
             D.append(("plugs", f"{s} slot {s_}: {k} > {infra[s]['n']}"))
         if L + kw > v["sites"][s]["G0"] + infra[s]["h"] + tol:
             D.append(("grid", f"{s} slot {s_}: {L + kw:.6g} kW"))
-        peak[s] = max(peak[s], L + kw)
+        if w0 <= s_ * dl % 86400 < w1:                 # billing demand counts in its window
+            peak[s] = max(peak[s], L + kw)
     parts = dict(buses=co["F"] * len(duties), deadhead=co["deadhead"] * km_dh,
-                 energy=co["energy"] * kwh, depot_energy=co["depot_energy"] * restore,
+                 energy=rho * co["energy"] * kwh, depot_energy=rho * co["depot_energy"] * restore,
                  sites=co["site"] * len(infra),
                  plugs=co["plug"] * sum(i["n"] for i in infra.values()),
                  upgrade=co["upgrade"] * sum(i["h"] for i in infra.values()),
-                 peak=co["peak"] * sum(peak.values()))
+                 peak=rho * co["peak"] * sum(peak.values()),
+                 **({"basic": rho * co["basic"] * len(infra)} if "basic" in co else {}))
     return dict(ok=not D, defects=D, cost=sum(parts.values()), parts=parts, fleet=len(duties),
                 trace=trace, load={k: tuple(u) for k, u in use.items()})

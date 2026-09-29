@@ -44,6 +44,75 @@ def test_tiny_equals_enumeration(seed):
     assert r["replay"]["ok"] and r["objective"] == pytest.approx(r["U"], rel=1e-6, abs=1e-4)
 
 
+RS1640 = dict(rider=-0.015, basic=0.2999)          # BC Hydro RS 1640 riders and basic charge
+
+
+def test_absent_tariff_keys_leave_m1_unchanged():
+    """Data §3: a scenario without tariff keys gives the rows and costs it gave before them."""
+    c, v = tiny(2)
+    w = copy.deepcopy(v)
+    w["cost"].update(rider=0.0, basic=0.0, peak_from=0.0, peak_to=24.0)
+    M, N = rows(c, v), rows(c, w)
+    assert np.array_equal(M["c"], N["c"])
+    a, b = M["R"].constraint(len(M["c"])), N["R"].constraint(len(N["c"]))
+    assert (a.A != b.A).nnz == 0 and np.array_equal(a.lb, b.lb) and np.array_equal(a.ub, b.ub)
+
+
+@pytest.mark.parametrize("seed", range(6))
+@pytest.mark.parametrize("w", [(6.0, 22.0), (7.5, 22.0)])
+def test_tiny_with_tariff_equals_enumeration(seed, w):
+    """Riders, a basic charge and demand billed only inside a window: M1's rows, the
+    enumeration's own MILP and the replay each price them, and agree. The 07:30 window cuts
+    through the tiny instances' charging slots."""
+    c, v = tiny(seed)
+    v["cost"].update(RS1640, peak_from=w[0], peak_to=w[1])
+    z, _ = enum_m1(c, v, "A", 1, 500.0)
+    r = m1(c, v, fixed={"A": dict(n=1, h=500.0)})
+    assert np.isfinite(z) and r["status"] == "optimal" and r["replay"]["ok"]
+    assert r["U"] == pytest.approx(z, rel=1e-6, abs=1e-4)
+    assert r["objective"] == pytest.approx(r["U"], rel=1e-6, abs=1e-4)
+
+
+def test_billing_window_moves_charging_out_of_it():
+    """The window binds: billed from 07:30, seed 1 charges earlier and its demand charge falls
+    from 60.22 to 13.38 (measured 2026-09-29), lowering the optimum."""
+    c, v = tiny(1)
+    v["cost"].update(RS1640)
+    a = m1(c, v, fixed={"A": dict(n=1, h=500.0)})
+    v["cost"].update(peak_from=7.5, peak_to=22.0)
+    b = m1(c, v, fixed={"A": dict(n=1, h=500.0)})
+    assert b["replay"]["parts"]["peak"] < a["replay"]["parts"]["peak"] - 40
+    assert b["U"] < a["U"] - 40
+
+
+def test_riders_and_basic_charge_by_hand():
+    """The replay's bill with a -1.5% rider and a basic charge, from the bill without them."""
+    c, v = tiny(1)
+    r = m1(c, v, fixed={"A": dict(n=1, h=500.0)})
+    a = replay_energy(c, v, r["duties"], r["plan"], r["infra"])
+    w = copy.deepcopy(v)
+    w["cost"].update(RS1640)
+    b = replay_energy(c, w, r["duties"], r["plan"], r["infra"])
+    for k in ("energy", "depot_energy", "peak"):
+        assert b["parts"][k] == pytest.approx(0.985 * a["parts"][k])
+    assert b["parts"]["basic"] == pytest.approx(0.985 * 0.2999 * len(r["infra"]))
+    e = a["parts"]["energy"] + a["parts"]["depot_energy"] + a["parts"]["peak"]
+    assert b["cost"] - a["cost"] == pytest.approx(-0.015 * e + b["parts"]["basic"])
+
+
+def test_billing_window_without_charging_bills_no_demand():
+    """Demand counts only in its window: after the last charging slot it is zero."""
+    c, v = tiny(1)
+    r = m1(c, v, fixed={"A": dict(n=1, h=500.0)})
+    last = max(s for d in r["plan"].values() for s in d)
+    w = copy.deepcopy(v)
+    w["cost"].update(peak_from=(last + 1) * v["time"]["delta"] / 3600, peak_to=24.0)
+    a = replay_energy(c, v, r["duties"], r["plan"], r["infra"])
+    b = replay_energy(c, w, r["duties"], r["plan"], r["infra"])
+    assert a["parts"]["peak"] > 0 and b["parts"]["peak"] == 0.0
+    assert b["cost"] == pytest.approx(a["cost"] - a["parts"]["peak"])
+
+
 def test_charging_is_needed_in_the_tiny_instances():
     used = [bool(m1(*tiny(s), fixed={"A": dict(n=1, h=500.0)})["plan"]) for s in range(6)]
     assert sum(used) >= 3
