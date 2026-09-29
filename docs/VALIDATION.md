@@ -1,8 +1,10 @@
 # Validation
 
-**Status: no check has been executed.** This file specifies the evidence each
-phase must produce. It becomes a record of executed checks, with the revision
-that ran them, as phases complete.
+**Status: record of executed checks, revision 6b2b737 (29 September 2026).** Every
+row below names the test that executes it; `python -m pytest -q` runs all of them
+(`-m "not slow"` skips the four marked slow, `-m "not data"` those needing the fetched
+benchmark or feed). Locally all pass on Python 3.14.7, numpy 2.5.3, SciPy 1.18.1.
+GitHub Actions runs the suite without `data` and `slow` on every push.
 
 **1. What counts as evidence**
 
@@ -18,31 +20,35 @@ gap claim only under the contract of [Algorithms](ALGORITHMS.md) §8.
 
 **2. Checks by component**
 
-| Component | Check | Pass criterion |
-| --- | --- | --- |
-| EVRP reader | Parse all 41 files of both sets | Counts match every section; SHA-256 matches the manifest |
-| Route validator | Hand-built fixtures: missing customer, repeated customer, overload, empty battery on a depot leg, station reset, depot reset | Each defect reported by name; each valid fixture accepted with its hand-computed length |
-| Route validator | Replay of the report's E-n22-k4 value | A replayed solution of length 384.678035 exists, or the discrepancy is recorded |
-| Primal-dual LP | Vanderbei's worked examples; random feasible bounded LPs | Optimal values agree with `highs-ds`; residuals satisfy (A2) |
-| Primal-dual LP | Bound (A3) at every iterate, on the same LPs | Never exceeds the `highs-ds` optimum by more than tolerance |
-| Primal-dual LP | Infeasible and unbounded constructions | Status `numerical` or `limit`, never `optimal` |
-| Primal-dual QP | Random strictly convex box QPs with one equality | KKT residuals below tolerance; objective agrees with exact active-set enumeration |
-| Station paths | Pareto filter on small instances | Every discarded path is dominated by a kept one, checked pairwise |
-| R1 | Sub-instances of at most 6 customers | R1, R1-TR, and brute-force enumeration agree on the optimal value |
-| R1 | Every returned solution | Passes the route validator; length recomputed from coordinates agrees |
-| R0, R1, R2 | Ordering on every instance | bound(R2) <= z(R1) and z(R0) <= z(R1), within tolerance |
-| R2 | Bound (R2.2) with exact pricing | Never above any replayed feasible length; a violation is a defect |
-| R2 | Interior versus simplex duals | Both reach the same master value; iteration counts reported, not asserted |
-| Branch-and-bound | Tiny R1 and M1 instances | Same optimum as HiGHS; global lower bound nondecreasing; no node pruned on an uncertified bound |
-| M0 | Matching LP, min-cost flow, and agency blocks | Matching and flow fleets agree; fleet at most the number of agency blocks for the same trips |
-| M1 | Every returned schedule | Replay: each trip once, paths connected in time, energy within bounds, plugs within capacity |
-| M1-Q, M2, R3 | Derivatives | Analytic gradients and Hessians agree with finite differences |
-| M1-Q, M2, R3 | Fixed-integer subproblems | Bound (A5) <= subproblem value; optional conic solve agrees |
-| OA | M2 and R3 | Lower bounds nondecreasing; final bracket within tolerance or status `stall` |
-| M2-P, R3-P | Brackets | Lower MILP bound <= OA value <= reconstructed upper value |
-| M3 | Charging law | Closed form (14) agrees with independent numerical integration of (13) |
-| M3 | Local solutions | Several feasible starts; KKT residuals reported; never labeled global |
-| M4 | Scenario feasibility | Common decisions replay as feasible in every enumerated scenario |
+| Component | Check | Test (tests/...) | Result |
+| --- | --- | --- | --- |
+| Result contract | Status set; gap only with both bounds; negative gap flagged; solver code, time and provenance required | test_certificate.py | Pass |
+| EVRP reader | 41 files verify SHA-256 and parse; both header variants; two NAME mismatches pinned | test_evrp_data.py | Pass |
+| Route replay | Each defect of the hand fixtures named; valid routes at hand-computed lengths; evrp-python tours convert and replay | test_route_replay.py | Pass |
+| Toolchain | milp dual bound; highs-ipm interior points, no early duals; trust-constr accuracy follows its barrier parameter | test_toolchain.py | Pass |
+| Primal-dual LP | Vanderbei (2.1) and ex. 3.1; 20 random LPs and 11 further cases against highs-ds; nonzero lower bounds | test_ipm.py | Pass |
+| Primal-dual LP | (A3) at every iterate below the optimum; infeasible and unbounded examples never optimal; early stop gives interior duals; large-bound counterexamples of the Phase 2 verification | test_ipm.py | Pass |
+| Primal-dual LP | Normal equations agree with the quasi-definite system; standard() leaves its input untouched | test_ipm.py | Pass |
+| Primal-dual QP | 10 random convex QPs against exact active-set enumeration | test_ipm.py | Pass |
+| Convex constraints | Disc: closed-form optimum and multiplier; separable loss rows inside a 200-piece tangent/secant bracket | test_ipm.py | Pass |
+| Station paths | Hand-computed Pareto set; brute-force dominance on E-n22-k4 | test_paths.py | Pass |
+| R1, R1-TR | Agree with exhaustive enumeration on the fixture, 8 self-made and 3 E-n22-k4 sub-instances; every solution replays; z(R0) <= z(R1); infeasibility detected | test_route_models.py | Pass |
+| Branch-and-bound | 0-1 programs and tiny R1 reach HiGHS's optimum with textbook, early-stopped and highs-ipm nodes; bounds nondecreasing; each early-stopped node's bound below its exact LP; validation required for incumbents | test_branch.py | Pass |
+| R2 | Exact pricing equals brute force over all elementary routes; converged bound within tolerance of the full set-partitioning LP with both dual sources; bound below R1 at every iteration; status optimal only when certified | test_colgen.py | Pass |
+| GTFS | Times past midnight; calendar then exceptions; Route 100 on 2026-10-07: 219 trips, 23 blocks; holiday runs Sunday service; fixture equals the snapshot | test_gtfs.py | Pass |
+| M0 | Matching LP, min-cost flow and Hopcroft-Karp agree; Dilworth on 10 timetables; IPM midpoint not rounded; Route 100 fleet 16 <= 23 blocks | test_network.py | Pass |
+| Scenarios | Values need unit and source | test_scenario.py | Pass |
+| M1 | Equals path-cover enumeration on 6 tiny timetables; replay finds a removed charge; tree certifies tiny M1 with priority; Route 100 morning bound and replay; IPM relaxation equals highs-ds | test_fleet.py | Pass |
+| M1-Q, M2 subproblems | QP method equals trust-constr; two barrier methods agree to 1e-6; (A5) below the value; derivatives match finite differences | test_charge.py | Pass |
+| OA, M2 | Known convex MINLP certified; M2 inside M2-P; z(M2) >= z(M1); bounds nondecreasing | test_oa.py | Pass |
+| R3 | Free charging equals R1 (one station per segment); scenario R3 inside R3-P and replays; fixed-route bound tight | test_recharge.py | Pass |
+| M3, M4 | (14) against integration; local M3 above the M1 bound; M4 against wait-and-see and worst case, replay per scenario | test_extensions.py | Pass |
+
+Defects these checks found, each now pinned by a test: the IPM's stopping rule under
+large bounds (Phase 2 verifier); standard() mutating its sparse input; a precedence
+error in R1-TR's load row; the redundant master bound lam <= 1; a Jacobian written into
+CSR data in coordinate order; R3's one-sided charge rows; the tree's node budget on M1
+without branching priority.
 
 **3. Experiments**
 
