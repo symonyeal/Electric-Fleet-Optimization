@@ -14,4 +14,5 @@ line-length = 100
 extend-select = ["E501"]
 # E741 rejects l, I and O as names; the documents use them as symbols.
 # I001 wraps imports one name per line, against the compact register of these files.
-ignore = ["E741", "I001"]
+# C408: dict(k=v) is how these files write a record.
+ignore = ["E741", "I001", "C408"]

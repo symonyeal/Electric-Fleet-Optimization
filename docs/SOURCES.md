@@ -10,8 +10,8 @@ it, then update the status).
 
 | Source | Used for | Status |
 | --- | --- | --- |
-| R. J. Vanderbei, *Linear Programming: Foundations and Extensions*, 4th ed., Springer, 2014 | Ch. 5 duality; Ch. 12 regression; Ch. 14-15 network flows and integrality; Ch. 17-20 central path, path-following method, KKT system, implementation; Ch. 22 homogeneous self-dual method; Ch. 23 integer programming; Ch. 24 quadratic programming; Ch. 25 convex programming | Inspected from the local PDF by the first design session. Chapter numbers to be re-checked against the table of contents in Phase 1 |
-| A. Beck, *Introduction to Nonlinear Optimization: Theory, Algorithms, and Applications with MATLAB*, SIAM, 2014 | Ch. 3-4 least squares and gradient method; Ch. 5 Newton's method; Ch. 7-8 convex functions and convex optimization; Ch. 10-12 optimality conditions, KKT, duality | As above |
+| R. J. Vanderbei, *Linear Programming: Foundations and Extensions*, 4th ed., Springer, 2014 | Ch. 5 duality; Ch. 12 regression; Ch. 14-15 network flows and integrality; Ch. 17-20 central path, path-following method, KKT system, implementation; Ch. 22 homogeneous self-dual method; Ch. 23 integer programming; Ch. 24 quadratic programming; Ch. 25 convex programming | Inspected from the local PDF. Chapter numbers re-checked against the PDF outline on 2026-09-28: all agree |
+| A. Beck, *Introduction to Nonlinear Optimization: Theory, Algorithms, and Applications with MATLAB*, SIAM, 2014 | Ch. 3-4 least squares and gradient method; Ch. 5 Newton's method; Ch. 7-8 convex functions and convex optimization; Ch. 10-12 optimality conditions, KKT, duality | Inspected from the local PDF. Chapter numbers re-checked against its contents pages on 2026-09-28: all agree. ง7.4 (operations preserving convexity) does not treat the perspective, hence the next entry |
 | S. Boyd and L. Vandenberghe, *Convex Optimization*, Cambridge, 2004 | ยง3.2.6 perspective of a convex function, for (R3.3) | Cited |
 
 **2. EVRP benchmark and baseline**
