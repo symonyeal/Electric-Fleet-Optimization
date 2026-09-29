@@ -229,8 +229,9 @@ def summary():
         E = sum(min(e for _, e in tr) < rB - 1e-6 for tr in r0["trace"])
         L += ["", (f"Route 100 on {c.get('date', 'the service day')}: {a['trips']} trips need "
                    f"{a['fleet']} buses without batteries (M0). With the illustrative "
-                   f"{v['battery']['B']:g} kWh battery and no charging, {E} of those "
-                   f"{a['fleet']} duties fall below the reserve.")]
+                   f"{v['battery']['B']:g} kWh battery and no charging, "
+                   + (f"all {E}" if E == a["fleet"] else f"{E} of those {a['fleet']}")
+                   + " duties fall below the reserve.")]
         b = bundle(OUT / "transit" / "route100-M1.json")
         if b:
             gap = "-" if b["gap_rel"] is None else f"{100 * b['gap_rel']:.2f}%"
