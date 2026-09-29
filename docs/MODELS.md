@@ -1,5 +1,9 @@
 # Transit models
 
+These models turn a published service timetable into a vehicle-blocking, charging, and grid
+capacity problem. Their outputs are scenario results for the declared graph and inputs, not
+a reconstruction of agency dispatch or a capital approval.
+
 The routing models R0-R4 are in [Routing](ROUTING.md). All costs are minimized. Vector inequalities are componentwise. Time is in hours,
 distance in km, energy in kWh, and power in kW. A result is exact only for its
 declared graph, input parameters, temporal resolution, and solver tolerances.

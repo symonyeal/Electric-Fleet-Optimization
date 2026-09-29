@@ -1,5 +1,8 @@
 # Algorithms and certificates
 
+This page explains how the optimization methods produce operating recommendations with an
+explicit bound, rather than presenting a feasible schedule as a certified optimum.
+
 **1. Where interior-point methods enter**
 
 The computational study has two tracks sharing the same physical models.

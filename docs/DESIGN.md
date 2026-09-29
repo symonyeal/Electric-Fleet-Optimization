@@ -1,5 +1,9 @@
 # Design
 
+This design links EV routing and transit vehicle blocking through one question: what do range
+and charging constraints add to the cost of serving the same demand, and how tightly is that
+increment bounded?
+
 **1. Decision**
 
 Build **Electric-Fleet-Model**: exact models for electric-vehicle routing and

@@ -1,5 +1,8 @@
 # Toolchain
 
+This page records the solver and numerical behavior that qualifies the reported bounds and
+run times; it does not treat a package version as a performance claim.
+
 Measured 28 September 2026 on the system Python 3.14.7 (Windows 10, AMD64): numpy 2.5.3,
 SciPy 1.18.1 with its bundled HiGHS 1.12.0, pytest 9.1.1, ruff 0.16.7. Each statement below is
 pinned by a test in `tests/test_toolchain.py`; a SciPy upgrade that changes one fails there.

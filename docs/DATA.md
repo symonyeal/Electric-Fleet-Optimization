@@ -1,5 +1,8 @@
 # Data
 
+This register separates published fleet and benchmark inputs from declared planning
+assumptions, so a reader can identify which quantity drives each modeled outcome.
+
 Observed inputs and declared assumptions are kept apart. Every instance carries a
 manifest: source URL, retrieval date, revision or version, SHA-256, and the
 transformations applied. No checksum is recorded in this design; Phase 1 records
