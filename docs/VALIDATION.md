@@ -1,6 +1,6 @@
 # Validation
 
-**Status: record of executed checks, revision 6b2b737 (29 September 2026).** Every
+**Status: record of executed checks, revision 2ce4b8b and the changes committed with this file (29 September 2026).** Every
 row below names the test that executes it; `python -m pytest -q` runs all of them
 (`-m "not slow"` skips the four marked slow, `-m "not data"` those needing the fetched
 benchmark or feed). Locally all pass on Python 3.14.7, numpy 2.5.3, SciPy 1.18.1.
@@ -22,7 +22,7 @@ gap claim only under the contract of [Algorithms](ALGORITHMS.md) §8.
 
 | Component | Check | Test (tests/...) | Result |
 | --- | --- | --- | --- |
-| Result contract | Status set; gap only with both bounds; negative gap flagged; solver code, time and provenance required | test_certificate.py | Pass |
+| Result contract | Status set; gap only with both bounds; negative gap flagged; solver code, time and provenance required; the revision is fixed at process start and ignores result files | test_certificate.py | Pass |
 | EVRP reader | 41 files verify SHA-256 and parse; both header variants; two NAME mismatches pinned | test_evrp_data.py | Pass |
 | Route replay | Each defect of the hand fixtures named; valid routes at hand-computed lengths; evrp-python tours convert and replay | test_route_replay.py | Pass |
 | Toolchain | milp dual bound; highs-ipm interior points, no early duals; trust-constr accuracy follows its barrier parameter | test_toolchain.py | Pass |
@@ -38,15 +38,16 @@ gap claim only under the contract of [Algorithms](ALGORITHMS.md) §8.
 | GTFS | Times past midnight; calendar then exceptions; Route 100 on 2026-10-07: 219 trips, 23 blocks; holiday runs Sunday service; fixture equals the snapshot | test_gtfs.py | Pass |
 | M0 | Matching LP, min-cost flow and Hopcroft-Karp agree; Dilworth on 10 timetables; IPM midpoint not rounded; Route 100 fleet 16 <= 23 blocks | test_network.py | Pass |
 | Scenarios | Values need unit and source | test_scenario.py | Pass |
-| M1 | Equals path-cover enumeration on 6 tiny timetables; replay finds a removed charge; tree certifies tiny M1 with priority; Route 100 morning bound and replay; IPM relaxation equals highs-ds | test_fleet.py | Pass |
+| M1 | Equals path-cover enumeration on 6 tiny timetables; replay finds a removed charge; replay traces start at s0 B, stay above the reserve and sum to the charged energy; tree certifies tiny M1 with priority; Route 100 morning bound and replay; IPM relaxation equals highs-ds | test_fleet.py | Pass |
 | M1-Q, M2 subproblems | QP method equals trust-constr; two barrier methods agree to 1e-6; (A5) below the value; derivatives match finite differences | test_charge.py | Pass |
 | OA, M2 | Known convex MINLP certified; M2 inside M2-P; z(M2) >= z(M1); bounds nondecreasing | test_oa.py | Pass |
 | R3 | Free charging equals R1 (one station per segment); scenario R3 inside R3-P and replays; fixed-route bound tight | test_recharge.py | Pass |
 | M3, M4 | (14) against integration; local M3 above the M1 bound; M4 against wait-and-see and worst case, replay per scenario | test_extensions.py | Pass |
+| Report | Multi-station segments counted on hand-made routes, the depot excluded | test_bench.py | Pass |
 
 Defects these checks found, each now pinned by a test: the IPM's stopping rule under
 large bounds (Phase 2 verifier); standard() mutating its sparse input; a precedence
-error in R1-TR's load row; the redundant master bound lam <= 1; a Jacobian written into
+error in R1-TR's load row; bundle revisions stamped at completion rather than at start; the redundant master bound lam <= 1; a Jacobian written into
 CSR data in coordinate order; R3's one-sided charge rows; the tree's node budget on M1
 without branching priority.
 
@@ -62,13 +63,21 @@ without branching priority.
 | Price of charging physics | Corridor; 2019 E set | M2 against M1; R3 against R1 over a parameter grid |
 | Scale | Corridor subsets of increasing size | Where each method stops returning a certificate |
 
-**4. Scale limits to expect**
+**4. Scale limits measured so far**
 
-No limit below is measured. R1 with HiGHS is expected to certify the smallest
-2019 instances and not the X set. R2 bounds are expected to reach further than
-R1, limited by pricing. The textbook IPM is expected to be slower than HiGHS on
-every instance; its purpose is interior duals and exposure of the method. Each
-expectation is replaced by a measurement or removed.
+From the bundles in `docs/results` ([Results](results/README.md)):
+
+- R1 with HiGHS certified E-n23-k3 in 211 s and did not close E-n22-k4 in 600 s
+  (L = 341.25 against U = 384.68). R0 certified both; on E-n30-k3 it stopped at
+  600 s with a 26.8% gap.
+- R2 bounded E-n22-k4 at 380.50, well above R1's bound: 9.8 s with interior duals,
+  39.3 s with simplex duals. On E-n23-k3 neither dual source finished within the
+  session; the runs were stopped.
+- M1 certified Route 100 to 08:00 (54 trips) and reached a 0.85% gap to 10:00
+  (77 trips, 900 s). For the full day (219 trips) it stopped at 1,800 s with a 36.6%
+  gap: the bound stays near the battery-free cost.
+- Not yet measured: R0, R1 and R2 on E-n33-k4 to E-n101-k8; the charging-physics grid
+  of §3 (`python run_bench.py --grid`).
 
 **5. Acceptance criteria for the first release**
 

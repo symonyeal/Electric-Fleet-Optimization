@@ -92,8 +92,8 @@ def verdicts():
         gsga = [b for f in sorted((OUT / "baseline").glob(f"{n}-GSGA-*.json"))
                 if (b := bundle(f)) and b.get("U") is not None]
         Ls = [b["L"] for m, b in r.items() if b and b.get("L") is not None and m != "R0"]
-        if r["R0"] and r["R0"].get("certified"):
-            Ls.append(r["R0"]["U"])                 # z(R0) <= z(R1) (Routing §3)
+        if r["R0"] and r["R0"].get("L") is not None:
+            Ls.append(r["R0"]["L"])                 # L(R0) <= z(R0) <= z(R1) (Routing §3)
         Us = [b["U"] for m, b in r.items() if b and m != "R0" and b.get("U") is not None]
         Us += [b["U"] for b in gsga]
         L, U = (max(Ls) if Ls else None), (min(Us) if Us else None)
@@ -131,8 +131,8 @@ def write_readme():
              "Bundles written before 6b290be record the revision at completion rather than at "
              "start, and mark '+dirty' when any file differed, untracked bundles included."), "",
              "## 2019 E instances (Validation §3, EVRP-06)", "",
-             ("L is the best valid lower bound (R1 and R2 dual bounds, and the certified R0 "
-             "value, since z(R0) <= z(R1)); U the shortest replayed solution (R1, R2's "
+             ("L is the best valid lower bound (R1 and R2 dual bounds, and R0's bound, "
+             "since z(R0) <= z(R1)); U the shortest replayed solution (R1, R2's "
              "restricted master, GSGA). evrp-python's README values are not replayed. The "
              "last column counts segments of U's routes that pass two or more stations in a "
              "row (Routing §4)."), "",
