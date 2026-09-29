@@ -1,0 +1,81 @@
+{
+ "model": "R0",
+ "instance": "E-n30-k3",
+ "status": "feasible_limit",
+ "U": 509.65572205853255,
+ "L": 373.26535573347354,
+ "gap_abs": 136.390366325059,
+ "gap_rel": 0.2676127440974654,
+ "certified": false,
+ "defect": null,
+ "solver": {
+  "code": 1,
+  "message": "Time limit reached. (HiGHS Status 13: Time limit reached)"
+ },
+ "elapsed": 600.1415541000315,
+ "provenance": {
+  "revision": "6b290be+dirty",
+  "instance": "E-n30-k3",
+  "key": "evrp-2019/E-n30-k3",
+  "sha256": "3bbff3bf0c9af17e719ecb9d6813a156ee4150a9b4af6d6b4569d77a0ec8db03",
+  "params": {
+   "time_limit": 600.0,
+   "mip_rel_gap": 1e-07
+  }
+ },
+ "routes": [
+  [
+   1,
+   3,
+   6,
+   5,
+   4,
+   23,
+   21,
+   1
+  ],
+  [
+   1,
+   11,
+   12,
+   13,
+   9,
+   15,
+   10,
+   18,
+   8,
+   14,
+   17,
+   16,
+   24,
+   19,
+   1
+  ],
+  [
+   1,
+   22,
+   1
+  ],
+  [
+   1,
+   27,
+   29,
+   28,
+   30,
+   26,
+   25,
+   2,
+   7,
+   20,
+   1
+  ]
+ ],
+ "replay": {
+  "ok": true,
+  "defects": []
+ },
+ "objective": 509.6557220585325,
+ "paths": 870,
+ "rows": 871,
+ "nodes": 169858
+}
