@@ -71,10 +71,12 @@ def chain(o, arcs, x):
     return R
 
 
-def r1(p, battery=True, time_limit=600.0, gap=1e-7):
-    """R1 (battery=True) or R0 (battery=False). Returns a result record (checks.certificate).
+def rows(p, battery=True):
+    """R1 (battery=True) or R0 as data: min c'v, rows lo <= Av <= hi, lb <= v <= ub, v_k integer
+    where integ_k = 1. v = (x over arcs, u over customers[, y over customers]).
 
-    U is the length of the returned routes as replayed by checks.route; L is HiGHS's dual bound.
+    OUTPUT  dict(c, R, lb, ub, integ, arcs, cut): cut lists customers with no admissible path in
+            or out, which proves infeasibility; the rows are then not built.
     """
     o, I, b, C, Q, D = p["depot"], p["I"], p["b"], p["C"], p["Q"], p["D"]
     if battery:
@@ -93,10 +95,9 @@ def r1(p, battery=True, time_limit=600.0, gap=1e-7):
         out[i].append(k)
         inn[j].append(k)
         X.setdefault((i, j), []).append(k)
-    if cut := [i + 1 for i in I if not out[i] or not inn[i]]:      # no admissible path
-        return record("R1" if battery else "R0", p["name"], "infeasible", solver=dict(
-            code=None, message=f"customers {cut} have no admissible path in or out"),
-            elapsed=0.0, provenance=provenance(p), routes=None, paths=N)
+    M = dict(arcs=arcs, cut=[i + 1 for i in I if not out[i] or not inn[i]])
+    if M["cut"]:
+        return M
     for i in I:                                                     # (R1.2)
         R.add(out[i], [1.0] * len(out[i]), 1, 1)
         R.add(inn[i], [1.0] * len(inn[i]), 1, 1)
@@ -114,26 +115,45 @@ def r1(p, battery=True, time_limit=600.0, gap=1e-7):
         for j in I:                                                 # (R1.5)
             K = [k for k in inn[j] if len(arcs[k][5]) > 2 or arcs[k][0] == o]
             R.add([y(j), *K], [1.0, *[arcs[k][4] for k in K]], hi=Q)
-        for k, (i, j, l, a, w, v) in enumerate(arcs):                # (R1.6)
+        for k, (i, j, _, a, _, v) in enumerate(arcs):                # (R1.6)
             if len(v) == 2 and i != o and j != o:
-                M = Q - alpha[i]
-                R.add([y(j), y(i), k], [1.0, -1.0, a + M], hi=M)
-    lb = np.r_[np.zeros(N), b[I], [alpha[i] for i in I] if battery else []]
-    ub = np.r_[np.ones(N), np.full(n, C), np.full(n, Q) if battery else []]
-    c = np.r_[[a[2] for a in arcs], np.zeros(nv - N)]
-    res, dt = solve(c, R, lb, ub, np.r_[np.ones(N), np.zeros(nv - N)], time_limit, gap)
+                Mi = Q - alpha[i]
+                R.add([y(j), y(i), k], [1.0, -1.0, a + Mi], hi=Mi)
+    return dict(M, R=R, c=np.r_[[a[2] for a in arcs], np.zeros(nv - N)],
+                lb=np.r_[np.zeros(N), b[I], [alpha[i] for i in I] if battery else []],
+                ub=np.r_[np.ones(N), np.full(n, C), np.full(n, Q) if battery else []],
+                integ=np.r_[np.ones(N), np.zeros(nv - N)])
+
+
+def routes_of(p, M, v):
+    """Routes (exchange format) of a solution vector v of rows(p)."""
+    return chain(p["depot"], M["arcs"], v)
+
+
+def r1(p, battery=True, time_limit=600.0, gap=1e-7):
+    """R1 (battery=True) or R0 (battery=False) by HiGHS. Returns a result record.
+
+    U is the length of the returned routes as replayed by checks.route; L is HiGHS's dual bound.
+    """
+    name = "R1" if battery else "R0"
+    M = rows(p, battery)
+    if M["cut"]:
+        return record(name, p["name"], "infeasible", solver=dict(
+            code=None, message=f"customers {M['cut']} have no admissible path in or out"),
+            elapsed=0.0, provenance=provenance(p), routes=None, paths=len(M["arcs"]))
+    res, dt = solve(M["c"], M["R"], M["lb"], M["ub"], M["integ"], time_limit, gap)
     s = status(res)
-    routes = chain(o, arcs, res.x) if res.x is not None else None
+    routes = routes_of(p, M, res.x) if res.x is not None else None
     rp = replay(p if battery else dict(p, Q=np.inf), routes) if routes else None
     U = rp["length"] if rp and rp["ok"] else None
     L = getattr(res, "mip_dual_bound", None) if s in ("optimal", "feasible_limit") else None
-    return record("R1" if battery else "R0", p["name"], s, U=U, L=L,
+    return record(name, p["name"], s, U=U, L=L,
                   solver=dict(code=int(res.status), message=res.message), elapsed=dt,
                   provenance=provenance(p, time_limit=time_limit, mip_rel_gap=gap),
                   routes=routes,
                   replay=None if rp is None else dict(ok=rp["ok"], defects=rp["defects"]),
-                  objective=None if res.x is None else float(res.fun), paths=N, rows=len(R.lo),
-                  nodes=getattr(res, "mip_node_count", None))
+                  objective=None if res.x is None else float(res.fun), paths=len(M["arcs"]),
+                  rows=len(M["R"].lo), nodes=getattr(res, "mip_node_count", None))
 
 
 def r0(p, **kw):
