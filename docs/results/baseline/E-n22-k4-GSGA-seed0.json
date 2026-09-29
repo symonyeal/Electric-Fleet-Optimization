@@ -1,0 +1,64 @@
+{
+ "model": "GSGA",
+ "instance": "E-n22-k4",
+ "seed": 0,
+ "generations": 200,
+ "fitness": 384.6780925829082,
+ "U": 384.6780925829082,
+ "replay": {
+  "ok": true,
+  "defects": [],
+  "routes": 4
+ },
+ "routes": [
+  [
+   1,
+   9,
+   7,
+   26,
+   4,
+   5,
+   12,
+   14,
+   1
+  ],
+  [
+   1,
+   11,
+   30,
+   2,
+   3,
+   6,
+   8,
+   10,
+   1
+  ],
+  [
+   1,
+   15,
+   22,
+   20,
+   17,
+   1
+  ],
+  [
+   1,
+   18,
+   21,
+   19,
+   16,
+   28,
+   13,
+   1
+  ]
+ ],
+ "elapsed": 119.30103150004288,
+ "provenance": {
+  "revision": "2196226",
+  "instance": "E-n22-k4",
+  "key": "evrp-2019/E-n22-k4",
+  "sha256": "cc43d4be3c0f6f8435bfa9f1fb60eede083e93ec58313909d5ee7f6a1034a89b",
+  "params": {},
+  "evrp_python": "16d3499799ab7aa7bc3f11a5eaf8604947389462"
+ }
+}

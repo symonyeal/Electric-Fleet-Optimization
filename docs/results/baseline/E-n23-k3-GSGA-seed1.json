@@ -1,0 +1,61 @@
+{
+ "model": "GSGA",
+ "instance": "E-n23-k3",
+ "seed": 1,
+ "generations": 200,
+ "fitness": 571.947382752819,
+ "U": 571.947382752819,
+ "replay": {
+  "ok": true,
+  "defects": [],
+  "routes": 3
+ },
+ "routes": [
+  [
+   1
+  ],
+  [
+   1,
+   13,
+   12,
+   7,
+   2,
+   3,
+   32,
+   4,
+   17,
+   16,
+   15,
+   18,
+   23,
+   30,
+   21,
+   20,
+   19,
+   1
+  ],
+  [
+   1,
+   14,
+   11,
+   1,
+   22,
+   5,
+   6,
+   26,
+   9,
+   10,
+   8,
+   1
+  ]
+ ],
+ "elapsed": 720.0153670999571,
+ "provenance": {
+  "revision": "1d6860b+dirty",
+  "instance": "E-n23-k3",
+  "key": "evrp-2019/E-n23-k3",
+  "sha256": "11b55bb6952ee58208aed95e6af8060b728e4faf4442177398a68dc93d54ac83",
+  "params": {},
+  "evrp_python": "16d3499799ab7aa7bc3f11a5eaf8604947389462"
+ }
+}
