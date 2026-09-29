@@ -26,7 +26,7 @@ gap claim only under the contract of [Algorithms](ALGORITHMS.md) §8.
 | Primal-dual LP | Vanderbei's worked examples; random feasible bounded LPs | Optimal values agree with `highs-ds`; residuals satisfy (A2) |
 | Primal-dual LP | Bound (A3) at every iterate, on the same LPs | Never exceeds the `highs-ds` optimum by more than tolerance |
 | Primal-dual LP | Infeasible and unbounded constructions | Status `numerical` or `limit`, never `optimal` |
-| Primal-dual QP | Vanderbei Ch. 24 examples; random convex QPs | KKT residuals below tolerance; objective agrees with an independent solve |
+| Primal-dual QP | Random strictly convex box QPs with one equality | KKT residuals below tolerance; objective agrees with exact active-set enumeration |
 | Station paths | Pareto filter on small instances | Every discarded path is dominated by a kept one, checked pairwise |
 | R1 | Sub-instances of at most 6 customers | R1, R1-TR, and brute-force enumeration agree on the optimal value |
 | R1 | Every returned solution | Passes the route validator; length recomputed from coordinates agrees |

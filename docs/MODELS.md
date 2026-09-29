@@ -74,7 +74,8 @@ Removing battery and charger restrictions makes M0 a lower bound on fleet count.
 It is a lower bound on total cost only when its cost terms are aligned with the
 full objective and omitted terms are nonnegative. The elementary matching claim
 does not extend automatically to heterogeneous buses or prescribed multi-depot
-return constraints. Sources: Vanderbei Chapters 14-15.
+return constraints. Sources: Vanderbei Chapters 14-15; BT Ch. 7 (the assignment
+problem); PS (bipartite matching, total unimodularity).
 
 **3. M1: joint scheduling and charging MILP**
 

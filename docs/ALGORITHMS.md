@@ -45,7 +45,8 @@ $$
 \begin{bmatrix}-r_d\\-r_p\\\sigma\mu\mathbf1-Xs\end{bmatrix}. \tag{A1}
 $$
 
-Follow Vanderbei Chapters 17-20 for the central-path and KKT derivations. His
+Follow Vanderbei Chapters 17-20 for the central-path and KKT derivations, and
+BT Ch. 9 for the primal-dual path-following algorithm in the same notation. His
 chapters change conventions; the equations here consistently use minimization.
 Beck Chapter 5 supplies the Newton and damping interpretation.
 
@@ -155,7 +156,7 @@ with its inherited bound. If no usable bound exists, report no gap. An integral
 LP point must still satisfy every original physical row after fixing integers.
 Rounding an LP route is not an incumbent construction.
 
-The tree demonstrates Vanderbei Chapter 23. It is not intended to reproduce
+The tree demonstrates Vanderbei Chapter 23 and BT §11.2. It is not intended to reproduce
 commercial presolve, cutting planes, or advanced branching.
 
 **5. Convex nonlinear subproblems**

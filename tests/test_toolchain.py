@@ -27,6 +27,7 @@ def test_milp_reports_its_dual_bound():
 def test_highs_ipm_without_crossover_stops_inside_the_optimal_face():
     r = ipm(run_crossover="off", presolve=False)
     assert r.status == 0 and min(r.x[:2]) > 0.1          # not a vertex
+    assert r.ineqlin.marginals is not None                # duals of the completed solve
     assert min(ipm(run_crossover="on", presolve=False).x[:2]) == 0
 
 
