@@ -1,5 +1,8 @@
 # Sources
 
+This is the provenance register for the benchmark rules, transit inputs, algorithms, and
+charging assumptions used by the live models.
+
 A formulation is validated by the source it implements, not by the solver that
 ran it. Cite only what this file records, and add the entry in the change that
 uses it. Status is **inspected** (read for this project, with what was read) or

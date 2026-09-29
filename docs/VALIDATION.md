@@ -1,5 +1,8 @@
 # Validation
 
+This page records the independent replay, formulation, and analytical checks behind each
+reported routing, vehicle-blocking, and charging result.
+
 **Status: record of executed checks, revision 474149b and the changes committed with this file (29 September 2026).** Every
 row below names the test that executes it; `python -m pytest -q` runs all of them
 (`-m "not slow"` skips the four marked slow, `-m "not data"` those needing the fetched

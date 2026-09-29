@@ -1,7 +1,8 @@
 # Electric Fleet Model
 
-Exact models for electric-vehicle routing and electric-bus scheduling with charging.
-Each result carries a feasible upper bound, a valid lower bound, and an independent check.
+Reproducible models for electric-fleet routing, vehicle blocking, and charging planning.
+Each reported outcome carries a feasible upper bound, a valid lower bound, and an
+independent check, separating an operating insight from an untested assumption.
 
 **Status: implemented, 29 September 2026.** All models below run, and each is checked
 against a computation that does not share its code ([Validation](docs/VALIDATION.md)).
@@ -29,10 +30,10 @@ Route 100 on 2026-10-07: 219 trips need 16 buses without batteries (M0). With th
 
 | Component | Model | Check |
 | --- | --- | --- |
-| [Routing](docs/ROUTING.md) | EVRP on a station-path multigraph (R1); battery-free bound (R0) | The report's own formulation and brute-force enumeration on sub-instances |
+| [Routing](docs/ROUTING.md) | EVRP on a station-path multigraph (R1); battery-free fleet bound (R0) | The report's own formulation and brute-force enumeration on sub-instances |
 | [Routing bound](docs/ROUTING.md) | Set-partitioning LP by column generation with interior-point duals (R2) | A Lagrangian bound valid at every iteration; replayed published solutions |
-| [Partial recharging](docs/ROUTING.md) | Convex MINLP with resistive charging loss (R3) | Tangent and secant MILP bracket; conic cross-check at fixed routes |
-| [Transit](docs/MODELS.md) | Battery-free fleet (M0); joint scheduling and charging MILP (M1) | Matching against flow; agency blocks; schedule replay |
+| [Partial recharging](docs/ROUTING.md) | Convex MINLP with charging loss (R3) | Tangent and secant MILP bracket; conic cross-check at fixed routes |
+| [Transit](docs/MODELS.md) | Battery-free vehicle blocking (M0); joint scheduling and charging MILP (M1) | Matching against flow; agency blocks; schedule replay |
 | [Charging physics](docs/MODELS.md) | Convex MINLP (M2), nonconvex taper (M3), scenarios (M4) | Outer-approximation bounds; closed-form integration |
 | [Algorithms](docs/ALGORITHMS.md) | Primal-dual LP/QP method, branch-and-bound, outer approximation | HiGHS; textbook examples; certificate contract |
 
@@ -43,6 +44,10 @@ provenance, [Validation](docs/VALIDATION.md) the checks each phase must pass, an
 ## Background
 
 ### The problem
+
+Fleet electrification links vehicle availability, charging access, and grid demand. This
+repository turns that planning problem into an auditable operating model, while keeping the
+modelled case distinct from an agency operating plan or infrastructure authorization.
 
 An electric fleet trades range for charging. A delivery EV that cannot reach its
 next customer detours to a station; a bus that cannot finish its block needs a

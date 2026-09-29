@@ -1,5 +1,8 @@
 # Routing
 
+This track benchmarks electric-vehicle routing under range and charging constraints, then
+distinguishes a published route value from a value that has been replayed and bounded.
+
 All costs are minimized. The routing track uses the electric capacitated
 vehicle-routing benchmark of the IEEE WCCI-2020 competition (Mavrovouniotis et
 al., CEC 2020), in the copy distributed by
