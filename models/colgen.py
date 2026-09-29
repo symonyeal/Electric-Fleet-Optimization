@@ -199,7 +199,10 @@ def colgen(p, duals="ipm", nu=8, eps=1e-6, delta_max=0.1, delta_min=1e-9, D=10.0
             d = delta / 10 if exact and not fresh else delta_max
             delta = max(delta_min, min(d, gap / D) if math.isfinite(gap) else d)
     U, routes, rp = restricted_milp(p, cols)
-    return record("R2", p["name"], "optimal" if converged else "feasible_limit",
+    Lf = L if math.isfinite(L) else None
+    st = ("optimal" if U is not None and Lf is not None and U - Lf <= 1e-6 * (1 + abs(U))
+          else "feasible_limit" if U is not None else "no_incumbent")
+    return record("R2", p["name"], st,
                   U=U, L=L if math.isfinite(L) else None,
                   solver=dict(code=None, message="converged" if converged else "limit"),
                   elapsed=time.perf_counter() - t0,

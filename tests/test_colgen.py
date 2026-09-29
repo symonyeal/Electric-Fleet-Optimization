@@ -81,3 +81,11 @@ def test_e_n22_k4_sub_instance():
     for duals in ("ipm", "simplex"):
         r = colgen(q, duals=duals)
         assert r["converged"] and r["L"] <= z + 1e-6 <= r["U"] + 2e-6
+
+
+def test_status_is_optimal_only_when_the_gap_is_certified():
+    """R2's LP can converge while the integer gap stays open; status must say which."""
+    p = rand_instance(3, n=6)
+    r = colgen(p, duals="simplex")
+    assert r["converged"]
+    assert (r["status"] == "optimal") == (r["U"] - r["L"] <= 1e-6 * (1 + abs(r["U"])))
