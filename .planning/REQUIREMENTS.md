@@ -51,11 +51,11 @@ Formulation labels (R1.3, (A3), (7), ...) refer to `docs/ROUTING.md`, `docs/MODE
 
 ### Column generation
 
-- [ ] **CG-01**: User can solve R2's restricted master by the early-terminated textbook IPM and by HiGHS simplex, reading duals from each
-- [ ] **CG-02**: User can price exactly over ng-routes with load and battery resources on the station-path multigraph; heuristic pricing is labeled and never produces a bound
-- [ ] **CG-03**: The bound (R2.2) is evaluated at every iteration with exact pricing and never exceeds a replayed feasible length
-- [ ] **CG-04**: User can compare interior and simplex duals by outer iterations, pricing calls, time, and final bound on the 2019 E set
-- [ ] **CG-05**: The restricted master solved as a MILP over generated columns yields a replayed upper bound, and EVRP-06's statuses are updated with R2's bounds
+- [x] **CG-01**: User can solve R2's restricted master by the early-terminated textbook IPM and by HiGHS simplex, reading duals from each
+- [x] **CG-02**: User can price exactly over ng-routes with load and battery resources on the station-path multigraph; heuristic pricing is labeled and never produces a bound
+- [x] **CG-03**: The bound (R2.2) is evaluated at every iteration with exact pricing and never exceeds a replayed feasible length
+- [x] **CG-04**: User can compare interior and simplex duals by outer iterations, pricing calls, time, and final bound on the 2019 E set
+- [x] **CG-05**: The restricted master solved as a MILP over generated columns yields a replayed upper bound, and EVRP-06's statuses are updated with R2's bounds
 
 ### Transit models
 
@@ -72,22 +72,22 @@ Formulation labels (R1.3, (A3), (7), ...) refer to `docs/ROUTING.md`, `docs/MODE
 
 ### Convex subproblems
 
-- [ ] **NLP-01**: User can solve M1-Q's fixed-integer QP by the textbook QP method, agreeing with an independent solve
-- [ ] **NLP-02**: User can solve M2's fixed-integer NLP by `trust-constr` with analytic gradients and Hessians that agree with finite differences
-- [ ] **NLP-03**: User can solve R3's fixed-route problem with the closed perspective, eliminating fixed-zero faces before the barrier solve
-- [ ] **NLP-04**: Each fixed-integer solve reports the bound (A5) and KKT residuals, and (A5) never exceeds the subproblem value
+- [x] **NLP-01**: User can solve M1-Q's fixed-integer QP by the textbook QP method, agreeing with an independent solve
+- [x] **NLP-02**: User can solve M2's fixed-integer NLP by `trust-constr` with analytic gradients and Hessians that agree with finite differences
+- [x] **NLP-03**: User can solve R3's fixed-route problem with the closed perspective, eliminating fixed-zero faces before the barrier solve
+- [x] **NLP-04**: Each fixed-integer solve reports the bound (A5) and KKT residuals, and (A5) never exceeds the subproblem value
 
 ### Outer approximation
 
-- [ ] **OA-01**: User can run OA (A6) with the master dual bound as L, only replayed solutions as U, restoration for suspected infeasible assignments, and status `stall` when no violated cut is found
-- [ ] **OA-02**: User can solve M2 by OA on the corridor and read the M2-P bracket around it
-- [ ] **OA-03**: User can solve R3 by OA on small E instances under a declared scenario, read the R3-P bracket, and learn whether any R1 optimum uses a segment with two or more stations
+- [x] **OA-01**: User can run OA (A6) with the master dual bound as L, only replayed solutions as U, restoration for suspected infeasible assignments, and status `stall` when no violated cut is found
+- [x] **OA-02**: User can solve M2 by OA on the corridor and read the M2-P bracket around it
+- [x] **OA-03**: User can solve R3 by OA on small E instances under a declared scenario, read the R3-P bracket, and learn whether any R1 optimum uses a segment with two or more stations
 - [ ] **OA-04**: User can compare M2 with M1 and R3 with R1 over a declared parameter grid
 
 ### Extensions
 
-- [ ] **EXT-01**: User can solve M3 at fixed schedules from several feasible starts, with (14) checked against numerical integration, and read the aligned M1 optimistic bound; no M3 result is labeled global
-- [ ] **EXT-02**: User can solve M4 in expected-cost and worst-case form over an enumerated scenario set, with common decisions replayed in every scenario
+- [x] **EXT-01**: User can solve M3 at fixed schedules from several feasible starts, with (14) checked against numerical integration, and read the aligned M1 optimistic bound; no M3 result is labeled global
+- [x] **EXT-02**: User can solve M4 in expected-cost and worst-case form over an enumerated scenario set, with common decisions replayed in every scenario
 
 ### Studies and reporting
 
@@ -151,11 +151,11 @@ Formulation labels (R1.3, (A3), (7), ...) refer to `docs/ROUTING.md`, `docs/MODE
 | BNB-01 | Phase 4 | Complete |
 | BNB-02 | Phase 4 | Complete |
 | BNB-03 | Phase 4 | Complete |
-| CG-01 | Phase 5 | Pending |
-| CG-02 | Phase 5 | Pending |
-| CG-03 | Phase 5 | Pending |
-| CG-04 | Phase 5 | Pending |
-| CG-05 | Phase 5 | Pending |
+| CG-01 | Phase 5 | Complete |
+| CG-02 | Phase 5 | Complete |
+| CG-03 | Phase 5 | Complete |
+| CG-04 | Phase 5 | Complete |
+| CG-05 | Phase 5 | Complete |
 | TRN-01 | Phase 6 | Complete |
 | TRN-02 | Phase 6 | Complete |
 | TRN-03 | Phase 6 | Complete |
@@ -166,16 +166,16 @@ Formulation labels (R1.3, (A3), (7), ...) refer to `docs/ROUTING.md`, `docs/MODE
 | TRN-08 | Phase 7 | Pending |
 | TRN-09 | Phase 7 | Pending |
 | TRN-10 | Phase 7 | Pending |
-| NLP-01 | Phase 8 | Pending |
-| NLP-02 | Phase 8 | Pending |
-| NLP-03 | Phase 8 | Pending |
-| NLP-04 | Phase 8 | Pending |
-| OA-01 | Phase 9 | Pending |
-| OA-02 | Phase 9 | Pending |
-| OA-03 | Phase 9 | Pending |
+| NLP-01 | Phase 8 | Complete |
+| NLP-02 | Phase 8 | Complete |
+| NLP-03 | Phase 8 | Complete |
+| NLP-04 | Phase 8 | Complete |
+| OA-01 | Phase 9 | Complete |
+| OA-02 | Phase 9 | Complete |
+| OA-03 | Phase 9 | Complete |
 | OA-04 | Phase 9 | Pending |
-| EXT-01 | Phase 10 | Pending |
-| EXT-02 | Phase 10 | Pending |
+| EXT-01 | Phase 10 | Complete |
+| EXT-02 | Phase 10 | Complete |
 | RPT-01 | Phase 11 | Pending |
 | RPT-02 | Phase 11 | Pending |
 | RPT-03 | Phase 11 | Pending |
