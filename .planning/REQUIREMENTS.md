@@ -27,12 +27,12 @@ Formulation labels (R1.3, (A3), (7), ...) refer to `docs/ROUTING.md`, `docs/MODE
 
 ### Interior-point core
 
-- [ ] **IPM-01**: User can solve a standard-form LP with the textbook primal-dual method (A1), fraction-to-boundary steps, and stopping rule (A2), receiving x, y, s, and a status
-- [ ] **IPM-02**: The method's optimal values agree with `highs-ds` on Vanderbei's worked examples and on random feasible bounded LPs
-- [ ] **IPM-03**: For boxed LPs, the method reports the bound (A3) at every iterate, and it never exceeds the `highs-ds` optimum beyond tolerance
-- [ ] **IPM-04**: User can solve a convex QP by the same method (Vanderbei Ch. 24), with KKT residuals below tolerance
-- [ ] **IPM-05**: User can stop the method at a prescribed relative gap delta and receive the interior duals
-- [ ] **IPM-06**: Each solve reports matrix dimensions, factor nonzeros, factorization and solve times, and any regularization, with residuals against the unregularized equations
+- [x] **IPM-01**: User can solve a standard-form LP with the textbook primal-dual method (A1), fraction-to-boundary steps, and stopping rule (A2), receiving x, y, s, and a status
+- [x] **IPM-02**: The method's optimal values agree with `highs-ds` on Vanderbei's worked examples and on random feasible bounded LPs
+- [x] **IPM-03**: For boxed LPs, the method reports the bound (A3) at every iterate, and it never exceeds the `highs-ds` optimum beyond tolerance
+- [x] **IPM-04**: User can solve a convex QP by the same method (Vanderbei Ch. 24), with KKT residuals below tolerance
+- [x] **IPM-05**: User can stop the method at a prescribed relative gap delta and receive the interior duals
+- [x] **IPM-06**: Each solve reports matrix dimensions, factor nonzeros, factorization and solve times, and any regularization, with residuals against the unregularized equations
 
 ### Routing models
 
@@ -136,12 +136,12 @@ Formulation labels (R1.3, (A3), (7), ...) refer to `docs/ROUTING.md`, `docs/MODE
 | DATA-03 | Phase 1 | Complete |
 | CHK-01 | Phase 1 | Complete |
 | CHK-02 | Phase 1 | Complete |
-| IPM-01 | Phase 2 | Pending |
-| IPM-02 | Phase 2 | Pending |
-| IPM-03 | Phase 2 | Pending |
-| IPM-04 | Phase 2 | Pending |
-| IPM-05 | Phase 2 | Pending |
-| IPM-06 | Phase 2 | Pending |
+| IPM-01 | Phase 2 | Complete |
+| IPM-02 | Phase 2 | Complete |
+| IPM-03 | Phase 2 | Complete |
+| IPM-04 | Phase 2 | Complete |
+| IPM-05 | Phase 2 | Complete |
+| IPM-06 | Phase 2 | Complete |
 | EVRP-01 | Phase 3 | Pending |
 | EVRP-02 | Phase 3 | Pending |
 | EVRP-03 | Phase 3 | Pending |
