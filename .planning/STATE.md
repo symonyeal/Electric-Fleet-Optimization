@@ -2,11 +2,11 @@
 gsd_state_version: "1.0"
 current_phase: 3
 current_phase_name: Exact EVRP MILP
-status: planning
-stopped_at: Phase 7 complete, ready to plan Phase 3
+status: executing
+stopped_at: Session closed; long benchmark runs pending (Phases 3, 5, 9, 11)
 last_updated: "2026-09-29T15:51:59.746Z"
 last_activity: 2026-09-29
-last_activity_desc: Phase 7 complete, transitioned to Phase 3
+last_activity_desc: Results recorded; benchmark loops stopped at session close
 state_head: dd45542e9e51f7bb95c6cd34fe3d19731df110aa
 progress:
   total_phases: 11
@@ -23,14 +23,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-28)
 
 **Core value:** Every reported number is certified: a replayed feasible solution and a valid lower bound, with the gap stated, or an explicit status saying why not.
-**Current focus:** Phase 1: Foundations and EVRP data
+**Current focus:** Finish the experiment matrix: `python run_bench.py --run`, then `--grid`
 
 ## Current Position
 
 Phase: 3 of 11 (Exact EVRP MILP)
-Plan: Not started
-Status: Ready to plan
-Last activity: 2026-09-29 — Phase 7 complete, transitioned to Phase 3
+Plan: 03-03 partial (EVRP-06 open for E-n30-k3 to E-n101-k8)
+Status: Code complete for all 11 phases; Phases 1, 2, 4, 6, 7, 8, 10 verified. Pending runs: R0/R1/R2 on five E instances (Phases 3, 5), the OA-04 grid (Phase 9), RPT-01 (Phase 11)
+Last activity: 2026-09-29 — results recorded, loops stopped at session close
 
 Progress: [██████░░░░] 64%
 
