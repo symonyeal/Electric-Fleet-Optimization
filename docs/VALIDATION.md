@@ -1,9 +1,10 @@
 # Validation
 
-**Status: record of executed checks, revision 2ce4b8b and the changes committed with this file (29 September 2026).** Every
+**Status: record of executed checks, revision 474149b and the changes committed with this file (29 September 2026).** Every
 row below names the test that executes it; `python -m pytest -q` runs all of them
 (`-m "not slow"` skips the four marked slow, `-m "not data"` those needing the fetched
-benchmark or feed). Locally all pass on Python 3.14.7, numpy 2.5.3, SciPy 1.18.1.
+benchmark or feed). Locally all pass on Python 3.14.7, numpy 2.5.3, SciPy 1.18.1, and the fast suite
+(253 tests) on 29 September 2026 on Python 3.14.3, numpy 2.4.4, SciPy 1.17.1.
 GitHub Actions runs the suite without `data` and `slow` on every push.
 
 **1. What counts as evidence**
@@ -22,7 +23,7 @@ gap claim only under the contract of [Algorithms](ALGORITHMS.md) §8.
 
 | Component | Check | Test (tests/...) | Result |
 | --- | --- | --- | --- |
-| Result contract | Status set; gap only with both bounds; negative gap flagged; solver code, time and provenance required; the revision is fixed at process start and ignores result files | test_certificate.py | Pass |
+| Result contract | Status set; gap only with both bounds; negative gap flagged; solver code, time and provenance required; the revision is fixed at process start and ignores result files, planning notes and prose; provenance names the host | test_certificate.py | Pass |
 | EVRP reader | 41 files verify SHA-256 and parse; both header variants; two NAME mismatches pinned | test_evrp_data.py | Pass |
 | Route replay | Each defect of the hand fixtures named; valid routes at hand-computed lengths; evrp-python tours convert and replay | test_route_replay.py | Pass |
 | Toolchain | milp dual bound; highs-ipm interior points, no early duals; trust-constr accuracy follows its barrier parameter | test_toolchain.py | Pass |
@@ -47,7 +48,8 @@ gap claim only under the contract of [Algorithms](ALGORITHMS.md) §8.
 
 Defects these checks found, each now pinned by a test: the IPM's stopping rule under
 large bounds (Phase 2 verifier); standard() mutating its sparse input; a precedence
-error in R1-TR's load row; bundle revisions stamped at completion rather than at start; the redundant master bound lam <= 1; a Jacobian written into
+error in R1-TR's load row; bundle revisions stamped at completion rather than at start, and marked dirty by
+run_bench.py's own rewrite of README.md; the redundant master bound lam <= 1; a Jacobian written into
 CSR data in coordinate order; R3's one-sided charge rows; the tree's node budget on M1
 without branching priority.
 
@@ -71,13 +73,39 @@ From the bundles in `docs/results` ([Results](results/README.md)):
   (L = 341.25 against U = 384.68). R0 certified both; on E-n30-k3 it stopped at
   600 s with a 26.8% gap.
 - R2 bounded E-n22-k4 at 380.50, well above R1's bound: 9.8 s with interior duals,
-  39.3 s with simplex duals. On E-n23-k3 neither dual source finished within the
-  session; the runs were stopped.
+  39.3 s with simplex duals (the first machine; its bundles record no host).
+- From 29 September 2026 the runs used a second machine (Intel Core i5-1335U, SciPy 1.17.1,
+  the same HiGHS 1.12.0), two cases at a time; each bundle names its host
+  ([Toolchain](TOOLCHAIN.md)). On E-n23-k3 both dual sources converged to the LP bound
+  561.7179, interior duals in 197.6 s and simplex duals in 416.5 s; R1's certified optimum
+  571.9474 lies 1.8% above it. On E-n30-k3 simplex duals converged to 484.5677 in 849.8 s,
+  while the textbook IPM master stopped at its iteration limit in 122 of 156 outer
+  iterations and the run ended at its 1,800 s limit with bound 417.97. Interior duals are
+  therefore not uniformly faster: they won on the two smallest instances and failed on the
+  third. Why the master stops there is not yet investigated.
+- E-n30-k3 is bracketed at [484.5677, 527.2049] (R2's bound, R1's incumbent at 600 s; gap
+  8.09%). The report's 511.2539 lies inside the bracket, so it is neither certified nor
+  refuted. R0 on E-n33-k4 stopped at 600 s with L = 662.12.
 - M1 certified Route 100 to 08:00 (54 trips) and reached a 0.85% gap to 10:00
   (77 trips, 900 s). For the full day (219 trips) it stopped at 1,800 s with a 36.6%
   gap: the bound stays near the battery-free cost.
-- Not yet measured: R0, R1 and R2 on E-n33-k4 to E-n101-k8; the charging-physics grid
-  of §3 (`python run_bench.py --grid`).
+- The charging-physics grid (OA-04) was run twice. The first design compared M2 with M1 on
+  Route 100 before 06:30 with the declared 250 kWh battery, where no bus charges (least
+  energy 135.6 kWh against a 50 kWh reserve), so M2 = M1 at every alpha: true, and empty.
+  The grid now adds a declared 100 kWh battery, with which the window charges and loss costs
+  0.053, 0.107 and 0.208 CAD at the three alphas, each certified by OA. R3 on the eight far
+  customers of E-n22-k4 stalled at alpha = 0 after 1,203 s with an 18.5% gap: the loss row is
+  linear there, so the OA master MILP itself did not close within 600 s. On six customers R3
+  is certified at alpha 0, 2.5e-4 and 5e-4, with routes 3.17 (1.2%) longer than R1's at every
+  alpha. At alpha = 1e-3 it stalls with no incumbent, L = 293.81: the fixed-route barrier
+  subproblem reached its iteration limit on all three assignments. That alpha puts the
+  cost-optimal power sqrt(c_tau / (c_e alpha)) at exactly P = 100, so the optimum lies on
+  q <= P tau with a zero multiplier, where strict complementarity fails. On the certified
+  alpha = 5e-4 routes the same subproblem converges in 0.4 s at alpha = 0.99e-3 (293.791) and
+  1.01e-3 (293.838) and fails only at 1e-3. The grid point is kept as a measured limit of the
+  textbook barrier, not moved.
+- Not yet measured: R1 and R2 on E-n33-k4; R0, R1 and R2 on E-n51-k5 to E-n101-k8
+  (15 cases; `python run_bench.py --run --missing`).
 
 **5. Acceptance criteria for the first release**
 

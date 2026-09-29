@@ -82,7 +82,7 @@ Formulation labels (R1.3, (A3), (7), ...) refer to `docs/ROUTING.md`, `docs/MODE
 - [x] **OA-01**: User can run OA (A6) with the master dual bound as L, only replayed solutions as U, restoration for suspected infeasible assignments, and status `stall` when no violated cut is found
 - [x] **OA-02**: User can solve M2 by OA on the corridor and read the M2-P bracket around it
 - [x] **OA-03**: User can solve R3 by OA on small E instances under a declared scenario, read the R3-P bracket, and learn whether any R1 optimum uses a segment with two or more stations
-- [ ] **OA-04**: User can compare M2 with M1 and R3 with R1 over a declared parameter grid
+- [x] **OA-04**: User can compare M2 with M1 and R3 with R1 over a declared parameter grid
 
 ### Extensions
 
@@ -173,7 +173,7 @@ Formulation labels (R1.3, (A3), (7), ...) refer to `docs/ROUTING.md`, `docs/MODE
 | OA-01 | Phase 9 | Complete |
 | OA-02 | Phase 9 | Complete |
 | OA-03 | Phase 9 | Complete |
-| OA-04 | Phase 9 | Pending |
+| OA-04 | Phase 9 | Complete |
 | EXT-01 | Phase 10 | Complete |
 | EXT-02 | Phase 10 | Complete |
 | RPT-01 | Phase 11 | Pending |
@@ -188,4 +188,4 @@ Formulation labels (R1.3, (A3), (7), ...) refer to `docs/ROUTING.md`, `docs/MODE
 
 ---
 *Requirements defined: 2026-09-28*
-*Last updated: 2026-09-28 after initial definition*
+*Last updated: 2026-09-29 after the OA-04 grid*
