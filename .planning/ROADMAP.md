@@ -25,13 +25,13 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 1: Foundations and EVRP data** - Result contract, pinned benchmark files, keyword reader, independent route replay, toolchain facts (completed 2026-09-28)
 - [x] **Phase 2: Interior-point core** - Textbook primal-dual LP/QP method with bound (A3) and early-terminated duals (completed 2026-09-29)
 - [ ] **Phase 3: Exact EVRP MILP** - Station-path multigraph, R0/R1/R1-TR, first verdicts on the published values
-- [ ] **Phase 4: Branch-and-bound with interior-point nodes** - Educational tree with certified pruning on tiny R1 instances
+- [x] **Phase 4: Branch-and-bound with interior-point nodes** - Educational tree with certified pruning on tiny R1 instances (completed 2026-09-29)
 - [ ] **Phase 5: Column-generation bound** - R2 with interior versus simplex duals; bounds for the 2019 E set
-- [ ] **Phase 6: Transit data and battery-free fleet** - Pinned GTFS snapshot, trip DAG, M0 by matching and flow
+- [x] **Phase 6: Transit data and battery-free fleet** - Pinned GTFS snapshot, trip DAG, M0 by matching and flow (completed 2026-09-29)
 - [ ] **Phase 7: Joint scheduling and charging** - Time-space graph, M1, schedule replay, scenario files
-- [ ] **Phase 8: Convex charging subproblems** - Fixed-integer M1-Q, M2, R3 by interior-point and barrier methods with (A5)
+- [x] **Phase 8: Convex charging subproblems** - Fixed-integer M1-Q, M2, R3 by interior-point and barrier methods with (A5) (completed 2026-09-29)
 - [ ] **Phase 9: Outer approximation** - OA for M2 and R3 with M2-P and R3-P brackets
-- [ ] **Phase 10: Nonconvex and scenario extensions** - M3 local solutions, M4 scenario fleet
+- [x] **Phase 10: Nonconvex and scenario extensions** - M3 local solutions, M4 scenario fleet (completed 2026-09-29)
 - [ ] **Phase 11: Studies and publication** - Experiment matrix, figures, regenerated README, executed validation record
 
 ## Phase Details
@@ -115,8 +115,8 @@ Plans:
 
 Plans:
 
-- [ ] 04-01: Tree, node LP by textbook IPM or `highs-ipm`, bound (A3), pruning rules
-- [ ] 04-02: Incumbent validation, trajectories, comparison with HiGHS on tiny R1
+- [x] 04-01: Tree, node LP by textbook IPM or `highs-ipm`, bound (A3), pruning rules
+- [x] 04-02: Incumbent validation, trajectories, comparison with HiGHS on tiny R1
 
 ### Phase 5: Column-generation bound
 
@@ -155,8 +155,8 @@ Plans:
 
 Plans:
 
-- [ ] 06-01: GTFS adapter, service-day and corridor selection, provenance
-- [ ] 06-02: Trip compatibility DAG, M0 matching and flow, block comparison
+- [x] 06-01: GTFS adapter, service-day and corridor selection, provenance
+- [x] 06-02: Trip compatibility DAG, M0 matching and flow, block comparison
 
 ### Phase 7: Joint scheduling and charging
 
@@ -195,8 +195,8 @@ Plans:
 
 Plans:
 
-- [ ] 08-01: M1-Q by the textbook QP method; M2 by `trust-constr` with analytic derivatives
-- [ ] 08-02: R3 fixed-route problem with the closed perspective; bound (A5) and residual checks
+- [x] 08-01: M1-Q by the textbook QP method; M2 by `trust-constr` with analytic derivatives
+- [x] 08-02: R3 fixed-route problem with the closed perspective; bound (A5) and residual checks
 
 ### Phase 9: Outer approximation
 
@@ -235,8 +235,8 @@ Plans:
 
 Plans:
 
-- [ ] 10-01: M3 charging law, fixed-schedule multi-start, integration check
-- [ ] 10-02: M4 scenario model and replay
+- [x] 10-01: M3 charging law, fixed-schedule multi-start, integration check
+- [x] 10-02: M4 scenario model and replay
 
 ### Phase 11: Studies and publication
 
@@ -267,11 +267,11 @@ Phases execute in numeric order. Phases 2, 3, and 6 depend only on Phase 1, so a
 | 1. Foundations and EVRP data | 3/3 | Complete    | 2026-09-28 |
 | 2. Interior-point core | 3/3 | Complete    | 2026-09-29 |
 | 3. Exact EVRP MILP | 0/3 | Not started | - |
-| 4. Branch-and-bound with interior-point nodes | 0/2 | Not started | - |
+| 4. Branch-and-bound with interior-point nodes | 2/2 | Complete    | 2026-09-29 |
 | 5. Column-generation bound | 0/3 | Not started | - |
-| 6. Transit data and battery-free fleet | 0/2 | Not started | - |
+| 6. Transit data and battery-free fleet | 2/2 | Complete    | 2026-09-29 |
 | 7. Joint scheduling and charging | 0/3 | Not started | - |
-| 8. Convex charging subproblems | 0/2 | Not started | - |
+| 8. Convex charging subproblems | 2/2 | Complete    | 2026-09-29 |
 | 9. Outer approximation | 0/3 | Not started | - |
-| 10. Nonconvex and scenario extensions | 0/2 | Not started | - |
+| 10. Nonconvex and scenario extensions | 2/2 | Complete    | 2026-09-29 |
 | 11. Studies and publication | 0/2 | Not started | - |
