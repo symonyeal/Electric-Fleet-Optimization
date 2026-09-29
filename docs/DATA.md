@@ -58,17 +58,35 @@ benchmark tests skip with a stated reason when the files are absent.
 
 **2. TransLink GTFS**
 
-A prior design session downloaded TransLink's public static GTFS feed and
-reported a 16.1 MB archive with 239 routes and 63,023 trip records across its
-service calendars. That session recorded neither URL nor checksum, and this
-session has not re-verified the counts. Phase 6 pins the URL, retrieval date,
-`feed_info.txt` version if present, SHA-256, and TransLink's terms of use. The
-feed is not committed; a small derived corridor fixture is, if the terms permit.
+Snapshot, pinned in `data/gtfs.py` and verified on every read:
 
-Observed inputs: trips, stop times, stops, shapes, calendars, and `block_id` if
-present. Where the feed assigns blocks, the agency's own blocks are a feasible
-battery-free schedule for the same trips, hence an upper bound on the M0 fleet.
-Their absence is recorded, not imputed.
+| Field | Value |
+| --- | --- |
+| URL | https://gtfs-static.translink.ca/gtfs/google_transit.zip |
+| Retrieved | 29 September 2026 (Last-Modified 25 September 2026) |
+| `feed_version` | 26SEP_20260925, valid 7 September 2026 to 3 January 2027 |
+| Size, SHA-256 | 16,146,377 bytes, `d587d4d91ce1cb23c27087c270c9b241adfd5668e19c39cdd823ccf7efdd986d` |
+| Contents | 239 routes, 63,023 trips, 1,844,733 stop times; `block_id` present |
+
+The feed is replaced weekly, so a later download will not match; the pinned copy
+must be kept. TransLink's terms grant a licence to use, reproduce and redistribute
+the data, with the legend "Route and arrival data used in this product or service
+is provided by permission of TransLink. TransLink assumes no responsibility for the
+accuracy or currency of the Data used in this product or service." The feed itself
+is not committed. The derived corridor `tests/fixtures/route100.json` is, and
+carries the legend and its source.
+
+Corridor: Route 100 (Marine Drive), Marpole Loop to 22nd Street Station, TransLink's
+battery-electric pilot route with overhead chargers at both loops
+([Sources](SOURCES.md)). Service day: Wednesday 7 October 2026 (calendar service 1,
+no exception). 30 September 2026 and 12 October 2026 run Sunday service. The day
+has 219 trips on 23 agency blocks, using four terminal stops, and ends at 26:23.
+
+Observed inputs: trips, stop times, stops, shapes, calendars, and `block_id`.
+Every agency connection between consecutive Route 100 trips of a block is feasible
+under the deadhead model of M0, so the blocks are a battery-free schedule for these
+trips. They also encode driver and depot rules that M0 does not, and a block may
+serve other routes; their count is a comparison, not a target.
 
 Horizon selection keeps every trip of the chosen service day, including trips
 after midnight, as [Models](MODELS.md) §1 requires.

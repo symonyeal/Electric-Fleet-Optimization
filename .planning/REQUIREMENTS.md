@@ -59,10 +59,10 @@ Formulation labels (R1.3, (A3), (7), ...) refer to `docs/ROUTING.md`, `docs/MODE
 
 ### Transit models
 
-- [ ] **TRN-01**: User can build a service-day instance from a pinned TransLink GTFS snapshot, including trips after midnight, and extract a corridor
-- [ ] **TRN-02**: User can build the trip compatibility DAG with deadhead and turnaround times, pruned by reachability from and to the depot
-- [ ] **TRN-03**: User can solve M0 as a matching LP and as a min-cost flow; the fleet sizes agree and duties are extracted without rounding an interior point
-- [ ] **TRN-04**: Where the feed has `block_id`, the M0 fleet is compared with the agency's block count for the same trips
+- [x] **TRN-01**: User can build a service-day instance from a pinned TransLink GTFS snapshot, including trips after midnight, and extract a corridor
+- [x] **TRN-02**: User can build the trip compatibility DAG with deadhead and turnaround times, pruned by reachability from and to the depot
+- [x] **TRN-03**: User can solve M0 as a matching LP and as a min-cost flow; the fleet sizes agree and duties are extracted without rounding an interior point
+- [x] **TRN-04**: Where the feed has `block_id`, the M0 fleet is compared with the agency's block count for the same trips
 - [ ] **TRN-05**: User can build the time-space graph with the slot convention of Models §1 from a corridor and a declared Delta
 - [ ] **TRN-06**: User can solve M1, rows (1)-(8) assembled once, with HiGHS, and its LP relaxation with the textbook IPM
 - [ ] **TRN-07**: Every M1 schedule passes an independent replay: each trip once, time-connected paths, energy within bounds, plugs within capacity
@@ -156,10 +156,10 @@ Formulation labels (R1.3, (A3), (7), ...) refer to `docs/ROUTING.md`, `docs/MODE
 | CG-03 | Phase 5 | Pending |
 | CG-04 | Phase 5 | Pending |
 | CG-05 | Phase 5 | Pending |
-| TRN-01 | Phase 6 | Pending |
-| TRN-02 | Phase 6 | Pending |
-| TRN-03 | Phase 6 | Pending |
-| TRN-04 | Phase 6 | Pending |
+| TRN-01 | Phase 6 | Complete |
+| TRN-02 | Phase 6 | Complete |
+| TRN-03 | Phase 6 | Complete |
+| TRN-04 | Phase 6 | Complete |
 | TRN-05 | Phase 7 | Pending |
 | TRN-06 | Phase 7 | Pending |
 | TRN-07 | Phase 7 | Pending |
