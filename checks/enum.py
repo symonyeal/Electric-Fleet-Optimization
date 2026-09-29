@@ -12,10 +12,10 @@ import math
 INF = math.inf
 
 
-def enum(p, tol=1e-9):
-    """OUTPUT  (z*, routes): optimal length and routes as 1-based identifiers; (inf, None) if
-    no feasible solution exists."""
-    X, o, I, F, Q, h, C, b = p["X"], p["depot"], p["I"], p["F"], p["Q"], p["h"], p["C"], p["b"]
+def route(p, seq, tol=1e-9):
+    """Least length of depot -> seq -> depot under the report's charging rules, with its nodes
+    (0-based); (inf, None) if no charging plan makes it feasible."""
+    X, o, F, Q, h = p["X"], p["depot"], p["F"], p["Q"], p["h"]
 
     def d(i, j):
         return math.hypot(X[i][0] - X[j][0], X[i][1] - X[j][1])
@@ -40,25 +40,30 @@ def enum(p, tol=1e-9):
                 out.append((dg + d(g, t), Q - h * d(g, t), walk[::-1]))
         return out
 
-    def route(seq):
-        labels = [(0.0, Q, [o])]
-        for t in [*seq, o]:
-            new = sorted((L + dl, y2, v + mid + [t]) for L, y, v in labels
-                         for dl, y2, mid in reach(v[-1], y, t))
-            labels, best = [], -INF
-            for lab in new:                                   # Pareto: shorter or more charge
-                if lab[1] > best + tol:
-                    labels.append(lab)
-                    best = lab[1]
-        return (labels[0][0], labels[0][2]) if labels else (INF, None)
+    labels = [(0.0, Q, [o])]
+    for t in [*seq, o]:
+        new = sorted((L + dl, y2, v + mid + [t]) for L, y, v in labels
+                     for dl, y2, mid in reach(v[-1], y, t))
+        labels, best = [], -INF
+        for lab in new:                                       # Pareto: shorter or more charge
+            if lab[1] > best + tol:
+                labels.append(lab)
+                best = lab[1]
+    return (labels[0][0], labels[0][2]) if labels else (INF, None)
 
+
+def enum(p, tol=1e-9):
+    """OUTPUT  (z*, routes): optimal length and routes as 1-based identifiers; (inf, None) if
+    no feasible solution exists."""
+    I, C, b = p["I"], p["C"], p["b"]
     n = len(I)
     cost = {0: (0.0, [])}
     for mask in range(1, 1 << n):
         S = [I[k] for k in range(n) if mask >> k & 1]
         cost[mask] = (INF, None)
         if sum(b[i] for i in S) <= C + tol:
-            cost[mask] = min((route(q) for q in itertools.permutations(S)), key=lambda r: r[0])
+            cost[mask] = min((route(p, q, tol) for q in itertools.permutations(S)),
+                             key=lambda r: r[0])
     f = {0: (0.0, [])}
     for mask in range(1, 1 << n):
         low, f[mask] = mask & -mask, (INF, None)

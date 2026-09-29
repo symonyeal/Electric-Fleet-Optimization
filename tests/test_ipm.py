@@ -211,3 +211,14 @@ def test_cases_agree_with_highs_ds(name):
         assert r["status"] == "optimal" and r["f"] == pytest.approx(h.fun, abs=1e-6)
     else:
         assert r["status"] != "optimal"
+
+
+def test_standard_does_not_mutate_its_input():
+    """standard() once compacted the caller's sparse A_ub in place (eliminate_zeros on shared
+    arrays), which corrupted it for the next branch-and-bound node."""
+    import scipy.sparse as sp
+    A = sp.csr_array((np.array([1.0, 0.0, 2.0]), np.array([0, 1, 2]), np.array([0, 2, 3])),
+                     shape=(2, 3))
+    data, ind, ptr = A.data.copy(), A.indices.copy(), A.indptr.copy()
+    standard([1.0, 1, 1], A, [1, 1])
+    assert (A.data == data).all() and (A.indices == ind).all() and (A.indptr == ptr).all()

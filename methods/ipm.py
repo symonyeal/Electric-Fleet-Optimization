@@ -29,7 +29,7 @@ def standard(c, A_ub=None, b_ub=None, A_eq=None, b_eq=None, l=None, u=None):
     n = len(c)
     l = np.zeros(n) if l is None else np.asarray(l, float)
     u = np.full(n, np.inf) if u is None else np.asarray(u, float)
-    Ai = sp.csr_array(np.zeros((0, n)) if A_ub is None else A_ub, dtype=float)
+    Ai = sp.csr_array(np.zeros((0, n)) if A_ub is None else A_ub, dtype=float, copy=True)
     Ae = sp.csr_array(np.zeros((0, n)) if A_eq is None else A_eq, dtype=float)
     bi = np.zeros(0) if b_ub is None else np.asarray(b_ub, float)
     be = np.zeros(0) if b_eq is None else np.asarray(b_eq, float)
