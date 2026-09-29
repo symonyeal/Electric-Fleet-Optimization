@@ -200,7 +200,10 @@ def write_readme():
                   "M2 against M1 compares cost; R3 against R1 compares the replayed route "
                   "length, since R3 also prices energy and dwell time. 'With' is filled only "
                   "when OA certified its value; the OA gap is on the model's own objective, "
-                  "and 'Without' carries the status of the model without losses."), "",
+                  "and 'Without' carries the status of the model without losses. The "
+                  "declared 250 kWh battery charges nothing before 06:30; the 100 kWh rows are "
+                  "declared so that the window must charge. The eight-customer R3 row measures "
+                  "the size at which OA stops closing."), "",
                   ("| Model pair | Instance | Measure | alpha | Without | With | Increase | "
                    "OA gap | Status | Seconds |"),
                   "|---|---|---|---:|---:|---:|---:|---:|---|---:|"]
@@ -405,9 +408,12 @@ def run(missing=False, jobs=1):
 
 
 def grid(missing=False):
-    """OA-04: M2 against M1 on Route 100 before 06:30, R3 against R1 on an E-n22-k4
-    sub-instance, over a declared grid of loss coefficients (illustrative). Each row is
-    written when it finishes; with missing, rows already in the bundle are kept."""
+    """OA-04: M2 against M1 on Route 100 before 06:30, R3 against R1 on E-n22-k4 restricted to
+    its six customers farthest from the depot, over declared loss coefficients (illustrative).
+    With the declared 250 kWh battery no bus charges before 06:30, so M2 = M1 there at every
+    alpha; the 100 kWh rows make the window charge. The eight-customer R3 row measures where OA
+    stops closing. Each row is written when it finishes; with missing, rows of this grid
+    already in the bundle are kept."""
     from checks.certificate import HOST, REVISION
     from checks.route import replay_charge
     from data.evrp import load, sub
@@ -416,49 +422,59 @@ def grid(missing=False):
     from models.fleet import m1
     from models.recharge import r3
     from models.route import r1
-    f = OUT / "grid" / "grid.json"
-    G = [g for g in (bundle(f) or []) if missing]
-    have = {(g["pair"], g["alpha"]) for g in G}
-
-    def put(g, r, b):
-        G.append(dict(g, base_status=b["status"], U=r["U"], L=r["L"], gap=r["gap_rel"],
-                      status=r["status"], elapsed=r["elapsed"], revision=REVISION, host=HOST))
-        f.parent.mkdir(parents=True, exist_ok=True)
-        f.write_text(json.dumps(G, indent=1) + "\n", encoding="utf-8")
-
     with open("tests/fixtures/route100.json", encoding="utf-8") as fh:
         c = json.load(fh)
     c = dict(c, trips=[t for t in c["trips"] if t["dep"] < 6.5 * 3600])
     v, _ = scenario("data/scenarios/route100.toml")
     v0 = copy.deepcopy(v)
     v0["charger"]["gamma"] = 0.0
-    b1 = None
-    for a in (3.3e-5, 6.7e-5, 1.3e-4):
-        if ("M2 / M1", a) in have:
-            continue
-        b1 = b1 or m1(c, v0, name="route100-until6.5h", time_limit=600)
-        w = copy.deepcopy(v0)
-        w["charger"]["alpha"] = a
-        r = m2(c, w, name="route100-until6.5h", max_iter=40, time_limit=1800)
-        put(dict(pair="M2 / M1", instance="route100 before 06:30", measure="cost", alpha=a,
-                 base=b1["U"], loss=r["U"] if r["status"] == "optimal" else None), r, b1)
     p = load("evrp-2019/E-n22-k4")
-    q = sub(p, sorted(p["I"], key=lambda i: -p["D"][p["depot"], i])[:8], p["F"])
+    far = sorted(p["I"], key=lambda i: -p["D"][p["depot"], i])
+    Q = {n: sub(p, far[:n], p["F"]) for n in (6, 8)}
     sc, _ = scenario("data/scenarios/r3.toml")
-    b3 = None
-    for a in (0.0, 2.5e-4, 5e-4, 1e-3):
-        if ("R3 / R1", a) in have:
+    K = [*[("M2 / M1", B, a) for B in (v0["battery"]["B"], 100.0)
+           for a in (3.3e-5, 6.7e-5, 1.3e-4)],
+         *[("R3 / R1", 6, a) for a in (0.0, 2.5e-4, 5e-4, 1e-3)], ("R3 / R1", 8, 0.0)]
+    nm = lambda k: (f"route100 before 06:30, {k[1]:g} kWh" if k[0] == "M2 / M1"
+                    else Q[k[1]]["name"])
+    idx = {(k[0], nm(k), k[2]): j for j, k in enumerate(K)}
+    key = lambda g: (g["pair"], g["instance"], g["alpha"])
+    f = OUT / "grid" / "grid.json"
+    G = [g for g in (bundle(f) or []) if missing and key(g) in idx]
+    have, base = {key(g) for g in G}, {}
+
+    def put(g, r, b):
+        G.append(dict(g, base_status=b["status"], U=r["U"], L=r["L"], gap=r["gap_rel"],
+                      status=r["status"], elapsed=r["elapsed"], revision=REVISION, host=HOST))
+        G.sort(key=lambda g: idx[key(g)])
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text(json.dumps(G, indent=1) + "\n", encoding="utf-8")
+
+    for k in K:
+        pair, z, a = k
+        if (pair, nm(k), a) in have:
             continue
-        b3 = b3 or r1(q)
+        if pair == "M2 / M1":
+            w = copy.deepcopy(v0)
+            w["battery"]["B"] = z
+            b = base[k[:2]] = base.get(k[:2]) or m1(c, w, name="route100-until6.5h",
+                                                    time_limit=600)
+            w["charger"]["alpha"] = a
+            r = m2(c, w, name="route100-until6.5h", max_iter=40, time_limit=1800)
+            put(dict(pair=pair, instance=nm(k), measure="cost", alpha=a, base=b["U"],
+                     loss=r["U"] if r["status"] == "optimal" else None), r, b)
+            continue
+        q = Q[z]
+        b = base[k[:2]] = base.get(k[:2]) or r1(q)
         s = copy.deepcopy(sc)
         s["charger"]["alpha"] = a
         r = r3(q, s, max_iter=60, time_limit=1800)
-        z = None
+        y = None
         if r["status"] == "optimal":
-            z = replay_charge(q, s, r["routes"], {tuple(map(int, k.split(":"))): qt
-                                                  for k, qt in r["charges"].items()})["length"]
-        put(dict(pair="R3 / R1", instance=q["name"], measure="route length", alpha=a,
-                 base=b3["U"], loss=z), r, b3)
+            y = replay_charge(q, s, r["routes"], {tuple(map(int, e.split(":"))): qt
+                                                  for e, qt in r["charges"].items()})["length"]
+        put(dict(pair=pair, instance=nm(k), measure="route length", alpha=a, base=b["U"],
+                 loss=y), r, b)
 
 
 if __name__ == "__main__":
