@@ -46,7 +46,9 @@ it, then update the status).
 
 | Source | Used for | Status |
 | --- | --- | --- |
-| TransLink static GTFS feed; URL pinned in Phase 6 | Transit timetable | Downloaded and counted by the first design session; URL and checksum not recorded ([Data](DATA.md) §2) |
+| TransLink static GTFS, snapshot 26SEP_20260925 ([Data](DATA.md) §2) | Transit timetable | Inspected 29 September 2026: all files; counts and checksum recorded |
+| [TransLink GTFS Static Data terms](https://www.translink.ca/about-us/doing-business-with-translink/app-developer-resources/gtfs/gtfs-data) | Licence and attribution legend | Inspected 29 September 2026 (search summary of the page) |
+| [The Buzzer, May 2019](https://buzzer.translink.ca/2019/05/translinks-four-battery-electric-buses-are-here/); [Daily Hive](https://dailyhive.com/vancouver/translink-electric-battery-bus-route-100) | Route 100 as TransLink's battery-electric pilot, chargers at Marpole Loop and 22nd Street Station, 4-7 minute charges | Inspected 29 September 2026 (search summary) |
 | [TransLink bus projects](https://www.translink.ca/plans-and-projects/projects/maintenance-and-upgrade-program/bus-projects) | Industry context | Inspected by the first design session |
 | [GTFS Schedule reference](https://gtfs.org/documentation/schedule/reference/) | Feed schema, `block_id`, times after midnight | Cited |
 | SciPy [`milp`](https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.milp.html), [`highs-ipm`](https://docs.scipy.org/doc/scipy/reference/optimize.linprog-highs-ipm.html), [`trust-constr`](https://docs.scipy.org/doc/scipy/reference/optimize.minimize-trustconstr.html) | Reference solvers | Inspected by the first design session; behavior on Python 3.14 checked in Phase 1 |

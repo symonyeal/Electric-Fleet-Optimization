@@ -12,11 +12,22 @@ from pathlib import Path
 
 import numpy as np
 
-from checks.route import write_routes
+from checks.route import read_routes, replay, write_routes
 from data.evrp import KEYS, load
+from models.colgen import colgen
 from models.route import r0, r1, r1tr
 
-MODELS = {"R0": r0, "R1": r1, "R1-TR": r1tr}
+
+def r2(p, duals, time_limit):
+    """R2 seeded with every replayed baseline route on disk for the instance."""
+    init = [r for f in sorted(Path("docs/results/baseline").glob(f"{p['name']}-*.routes"))
+            if replay(p, R := read_routes(f))["ok"] for r in R]
+    return colgen(p, duals=duals, init_routes=init, time_limit=time_limit)
+
+
+MODELS = {"R0": r0, "R1": r1, "R1-TR": r1tr,
+          "R2-ipm": lambda p, time_limit: r2(p, "ipm", time_limit),
+          "R2-simplex": lambda p, time_limit: r2(p, "simplex", time_limit)}
 
 
 def key(name):
