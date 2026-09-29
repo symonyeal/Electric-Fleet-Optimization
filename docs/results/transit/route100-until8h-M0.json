@@ -99,6 +99,10 @@
  "blocks": 16,
  "block_violations": 0,
  "pairs": 667,
+ "provenance": {
+  "revision": "6b290be+dirty",
+  "sha256": "d587d4d91ce1cb23c27087c270c9b241adfd5668e19c39cdd823ccf7efdd986d"
+ },
  "scenario": {
   "time.delta": [
    "s",
@@ -154,6 +158,14 @@
   ],
   "charger.eta": [
    "1",
+   "illustrative"
+  ],
+  "charger.alpha": [
+   "1/kW",
+   "illustrative"
+  ],
+  "charger.gamma": [
+   "CAD/(kW^2 h)",
    "illustrative"
   ],
   "sites.marpole.nbar": [

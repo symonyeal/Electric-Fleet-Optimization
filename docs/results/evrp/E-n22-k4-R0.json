@@ -1,0 +1,73 @@
+{
+ "model": "R0",
+ "instance": "E-n22-k4",
+ "status": "optimal",
+ "U": 375.2797871480124,
+ "L": 375.2797871480118,
+ "gap_abs": 6.252776074688882e-13,
+ "gap_rel": 1.6661638299807371e-15,
+ "certified": true,
+ "defect": null,
+ "solver": {
+  "code": 0,
+  "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+ },
+ "elapsed": 333.32126029999927,
+ "provenance": {
+  "revision": "16d5d58+dirty",
+  "instance": "E-n22-k4",
+  "key": "evrp-2019/E-n22-k4",
+  "sha256": "cc43d4be3c0f6f8435bfa9f1fb60eede083e93ec58313909d5ee7f6a1034a89b",
+  "params": {
+   "time_limit": 600.0,
+   "mip_rel_gap": 1e-07
+  }
+ },
+ "routes": [
+  [
+   1,
+   7,
+   2,
+   3,
+   6,
+   8,
+   10,
+   1
+  ],
+  [
+   1,
+   11,
+   9,
+   4,
+   5,
+   12,
+   14,
+   1
+  ],
+  [
+   1,
+   17,
+   20,
+   22,
+   15,
+   1
+  ],
+  [
+   1,
+   18,
+   21,
+   19,
+   16,
+   13,
+   1
+  ]
+ ],
+ "replay": {
+  "ok": true,
+  "defects": []
+ },
+ "objective": 375.2797871480118,
+ "paths": 462,
+ "rows": 463,
+ "nodes": 136450
+}
