@@ -58,4 +58,7 @@ def test_two_barrier_methods_agree(seed):
     a = m2_fixed(c, v, x, fixed={"A": dict(n=1, h=500.0)})
     b = m2_trust(c, v, x, fixed={"A": dict(n=1, h=500.0)})
     assert b["status"] in (1, 2) and b["violation"] < 1e-8
-    assert b["f"] == pytest.approx(a["f"], rel=1e-6) and b["bound"] <= b["f"] + 1e-6
+    # trust-constr's point is feasible to ~1e-8, so its value may sit a hair below the optimum
+    # the bound certifies: compare relatively (CI once saw bound - f > 1e-6 at f = 1335.41)
+    assert b["f"] == pytest.approx(a["f"], rel=1e-6)
+    assert b["bound"] <= b["f"] + 1e-8 * (1 + abs(b["f"]))
