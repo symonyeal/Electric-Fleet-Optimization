@@ -63,12 +63,12 @@ Formulation labels (R1.3, (A3), (7), ...) refer to `docs/ROUTING.md`, `docs/MODE
 - [x] **TRN-02**: User can build the trip compatibility DAG with deadhead and turnaround times, pruned by reachability from and to the depot
 - [x] **TRN-03**: User can solve M0 as a matching LP and as a min-cost flow; the fleet sizes agree and duties are extracted without rounding an interior point
 - [x] **TRN-04**: Where the feed has `block_id`, the M0 fleet is compared with the agency's block count for the same trips
-- [ ] **TRN-05**: User can build the time-space graph with the slot convention of Models §1 from a corridor and a declared Delta
-- [ ] **TRN-06**: User can solve M1, rows (1)-(8) assembled once, with HiGHS, and its LP relaxation with the textbook IPM
-- [ ] **TRN-07**: Every M1 schedule passes an independent replay: each trip once, time-connected paths, energy within bounds, plugs within capacity
-- [ ] **TRN-08**: Engineering parameters come from TOML scenario files in which every value has a unit and a source or the flag `illustrative`
-- [ ] **TRN-09**: User can compare M1 with M0 on the corridor: buses, deadhead, and cost
-- [ ] **TRN-10**: On tiny M1 instances the branch-and-bound of BNB-01 reaches the HiGHS optimum
+- [x] **TRN-05**: User can build the time-space graph with the slot convention of Models §1 from a corridor and a declared Delta
+- [x] **TRN-06**: User can solve M1, rows (1)-(8) assembled once, with HiGHS, and its LP relaxation with the textbook IPM
+- [x] **TRN-07**: Every M1 schedule passes an independent replay: each trip once, time-connected paths, energy within bounds, plugs within capacity
+- [x] **TRN-08**: Engineering parameters come from TOML scenario files in which every value has a unit and a source or the flag `illustrative`
+- [x] **TRN-09**: User can compare M1 with M0 on the corridor: buses, deadhead, and cost
+- [x] **TRN-10**: On tiny M1 instances the branch-and-bound of BNB-01 reaches the HiGHS optimum
 
 ### Convex subproblems
 
@@ -160,12 +160,12 @@ Formulation labels (R1.3, (A3), (7), ...) refer to `docs/ROUTING.md`, `docs/MODE
 | TRN-02 | Phase 6 | Complete |
 | TRN-03 | Phase 6 | Complete |
 | TRN-04 | Phase 6 | Complete |
-| TRN-05 | Phase 7 | Pending |
-| TRN-06 | Phase 7 | Pending |
-| TRN-07 | Phase 7 | Pending |
-| TRN-08 | Phase 7 | Pending |
-| TRN-09 | Phase 7 | Pending |
-| TRN-10 | Phase 7 | Pending |
+| TRN-05 | Phase 7 | Complete |
+| TRN-06 | Phase 7 | Complete |
+| TRN-07 | Phase 7 | Complete |
+| TRN-08 | Phase 7 | Complete |
+| TRN-09 | Phase 7 | Complete |
+| TRN-10 | Phase 7 | Complete |
 | NLP-01 | Phase 8 | Complete |
 | NLP-02 | Phase 8 | Complete |
 | NLP-03 | Phase 8 | Complete |

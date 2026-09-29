@@ -28,7 +28,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 4: Branch-and-bound with interior-point nodes** - Educational tree with certified pruning on tiny R1 instances (completed 2026-09-29)
 - [ ] **Phase 5: Column-generation bound** - R2 with interior versus simplex duals; bounds for the 2019 E set
 - [x] **Phase 6: Transit data and battery-free fleet** - Pinned GTFS snapshot, trip DAG, M0 by matching and flow (completed 2026-09-29)
-- [ ] **Phase 7: Joint scheduling and charging** - Time-space graph, M1, schedule replay, scenario files
+- [x] **Phase 7: Joint scheduling and charging** - Time-space graph, M1, schedule replay, scenario files (completed 2026-09-29)
 - [x] **Phase 8: Convex charging subproblems** - Fixed-integer M1-Q, M2, R3 by interior-point and barrier methods with (A5) (completed 2026-09-29)
 - [ ] **Phase 9: Outer approximation** - OA for M2 and R3 with M2-P and R3-P brackets
 - [x] **Phase 10: Nonconvex and scenario extensions** - M3 local solutions, M4 scenario fleet (completed 2026-09-29)
@@ -175,9 +175,9 @@ Plans:
 
 Plans:
 
-- [ ] 07-01: Time-space graph and slot convention; scenario files
-- [ ] 07-02: M1 rows assembled once; HiGHS and IPM relaxation; tree on tiny M1
-- [ ] 07-03: Schedule replay and the M1-versus-M0 study
+- [x] 07-01: Time-space graph and slot convention; scenario files
+- [x] 07-02: M1 rows assembled once; HiGHS and IPM relaxation; tree on tiny M1
+- [x] 07-03: Schedule replay and the M1-versus-M0 study
 
 ### Phase 8: Convex charging subproblems
 
@@ -270,7 +270,7 @@ Phases execute in numeric order. Phases 2, 3, and 6 depend only on Phase 1, so a
 | 4. Branch-and-bound with interior-point nodes | 2/2 | Complete    | 2026-09-29 |
 | 5. Column-generation bound | 0/3 | Not started | - |
 | 6. Transit data and battery-free fleet | 2/2 | Complete    | 2026-09-29 |
-| 7. Joint scheduling and charging | 0/3 | Not started | - |
+| 7. Joint scheduling and charging | 3/3 | Complete    | 2026-09-29 |
 | 8. Convex charging subproblems | 2/2 | Complete    | 2026-09-29 |
 | 9. Outer approximation | 0/3 | Not started | - |
 | 10. Nonconvex and scenario extensions | 2/2 | Complete    | 2026-09-29 |
