@@ -280,6 +280,16 @@ affine functions, the upper MILP. This pair, R3-P, brackets R3 exactly as M2-P
 brackets M2 ([Models](MODELS.md) §5). At fixed routes the continuous problem is
 solved by a barrier method with analytic derivatives and bounded by (A5).
 
+*As implemented* (`models/recharge.py`). The charge rows are equalities on used arcs, two
+big-M rows each. With partial charging, y must be the true charge, or the capacity row
+y_i - e_if + q <= Q is under-stated; the replay caught exactly that, a battery filled
+past Q, while the rows were one-sided. Each used station holds the vehicle at least
+tau_min, so (R3.3) is smooth for the barrier method. The cuts (R3.4) remain valid down
+to tau = 0. Grid energy is bounded by Q/eta + alpha Q^2/tau_min, the most one visit can
+draw, which keeps the bound (A5) finite. With free, near-instantaneous charging, R3's
+optimum equals R1's on the fixture and two self-made instances, all of whose R1 optima
+use at most one station per segment.
+
 **7. R4 (deferred): nonlinear charging functions**
 
 Montoya et al. (2017) model charging time as a concave piecewise-linear function

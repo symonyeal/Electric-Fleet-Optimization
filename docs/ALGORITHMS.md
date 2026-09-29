@@ -183,10 +183,18 @@ $$
 $$
 
 F and every g_i are convex in the full relaxed variable vector. Bounds and
-affine constraints remain explicit. At fixed y, solve the reduced continuous
-problem with `trust-constr`, analytic Jacobians, and the analytic Lagrangian
-Hessian. For M1-Q the Hessian is constant. For M2 the nonlinear constraints
-contribute diagonal charging-power curvature.
+affine constraints remain explicit. At fixed y, the reduced continuous problem is
+solved twice, by independent barrier methods. `methods/ipm.py` extends the primal-dual
+method of §2 to convex constraints h(v) <= 0 (Vanderbei Ch. 25): slacks s = -h(v)
+with multipliers lam, s lam = mu. Eliminating ds and dlam adds Hh + Jh'(lam/s)Jh to
+the (1,1) block of the quasi-definite system. Steps are common to primal and dual and
+backtrack on a residual merit. `trust-constr` is run with analytic Jacobians and the
+analytic Lagrangian Hessian. For M1-Q the Hessian is constant; for M2 the loss rows
+contribute diagonal charging-power curvature, and for R3 the 2 x 2 blocks of the
+perspective q^2/tau. On the M2 test instances the two agree to 1e-6. A finite-difference
+check of the Jacobian is part of the suite: it caught one written into CSR data in
+coordinate order, which had made `trust-constr` fail. The textbook method gives the
+bound (A5) directly from its own multipliers.
 
 The generic barrier equations use positive slacks w and multipliers lambda:
 

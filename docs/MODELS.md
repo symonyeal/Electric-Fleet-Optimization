@@ -274,6 +274,10 @@ the M1 optimum is a lower bound on M2 only when all other inputs, costs,
 connection rules, and the time graph are identical. A different tariff or grid
 is not a relaxation comparison.
 
+*As implemented.* `models/charge.py` solves M2 by outer approximation with gamma = 0, the loss
+alone; the stress term (9) is studied at fixed integers by M1-Q. On the tiny test instances
+M2 is certified, lies inside its M2-P bracket, and costs at least M1 at the same data.
+
 **5. M2-P: two MILP approximations**
 
 Let q(p)=alpha p^2 on [0,P], with breakpoints 0=b_0<...<b_J=P. Tangents give
