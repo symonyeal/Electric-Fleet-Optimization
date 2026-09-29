@@ -1,0 +1,17 @@
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+addopts = "-p no:cacheprovider"
+markers = [
+    "data: needs the fetched EVRP or GTFS files",
+    "slow: solves a benchmark instance to a certificate or a limit",
+]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+extend-select = ["E501"]
+# E741 rejects l, I and O as names; the documents use them as symbols.
+# I001 wraps imports one name per line, against the compact register of these files.
+ignore = ["E741", "I001"]
