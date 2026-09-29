@@ -54,6 +54,8 @@ include electric-bus fleet expansion, depot charging, electrical substations, an
 on-route chargers. Electric delivery fleets face the range and charging-stop
 decisions of R1-R3. This project studies those categories of decision; it models
 neither an agency's confidential engineering plan nor a carrier's operations.
+BT §12.3 treats airline fleet assignment as a network-flow MILP of the same class
+as M0 and M1.
 [TransLink bus projects](https://www.translink.ca/plans-and-projects/projects/maintenance-and-upgrade-program/bus-projects).
 
 **3. Relationship to the reference repositories**

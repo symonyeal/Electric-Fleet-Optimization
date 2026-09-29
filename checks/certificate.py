@@ -20,12 +20,15 @@ def certified(U, L, eps_abs=1e-6, eps_rel=1e-6):
     return U is not None and L is not None and U - L <= eps_abs + eps_rel * max(1.0, abs(U))
 
 
-def record(model, instance, status, U=None, L=None, eps_abs=1e-6, eps_rel=1e-6, **kw):
+def record(model, instance, status, U=None, L=None, *, solver, elapsed, provenance,
+           eps_abs=1e-6, eps_rel=1e-6, **kw):
     """One solve as a JSON-serializable dict.
 
-    INPUT   status ... one of STATUS
-            U, L ..... feasible objective and valid lower bound; None or inf when absent
-            kw ....... decisions, residuals, solver code and message, elapsed time, provenance
+    INPUT   status ....... one of STATUS
+            U, L ......... feasible objective and valid lower bound; None or inf when absent
+            solver ....... the solver's own code and message
+            elapsed ...... seconds; provenance: revision, data checksums, parameters
+            kw ........... decisions, residuals
     """
     if status not in STATUS:
         raise ValueError(f"status {status!r} not in {sorted(STATUS)}")
@@ -35,4 +38,5 @@ def record(model, instance, status, U=None, L=None, eps_abs=1e-6, eps_rel=1e-6, 
     return dict(model=model, instance=instance, status=status, U=U, L=L, gap_abs=g,
                 gap_rel=None if g is None else g / max(1.0, abs(U)),
                 certified=certified(U, L, eps_abs, eps_rel),
-                defect="negative gap" if g is not None and g < -tol else None, **kw)
+                defect="negative gap" if g is not None and g < -tol else None,
+                solver=solver, elapsed=elapsed, provenance=provenance, **kw)

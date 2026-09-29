@@ -163,7 +163,9 @@ z_{LP}(\Omega')\ \ge\ \sum_{i\in I}\pi_i+n\min\{0,\bar c^*\}. \tag{R2.2}
 $$
 
 The bound needs an exact pricing minimum, not an exact master. It is the
-route-space analogue of (A3) in [Algorithms](ALGORITHMS.md). Heuristic pricing
+route-space analogue of (A3) in [Algorithms](ALGORITHMS.md), and the Lagrangean
+duality of BT §11.4 applied to the covering rows; the column generation itself is
+BT §6.1. Heuristic pricing
 may add columns but cannot evaluate (R2.2). The final pricing call must be
 exact, or no bound is reported.
 
