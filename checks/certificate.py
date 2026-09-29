@@ -6,7 +6,11 @@ when both are finite. A gap below -tolerance is a defect to investigate, never c
 
 import functools
 import math
+import os
+import platform
 import subprocess
+import sys
+from importlib.metadata import version
 
 STATUS = {"optimal", "feasible_limit", "no_incumbent", "infeasible", "unbounded",
           "local", "numerical", "stall", "limit"}
@@ -46,17 +50,33 @@ def record(model, instance, status, U=None, L=None, *, solver, elapsed, provenan
 
 @functools.cache
 def revision():
-    """Short git revision, with '+dirty' when the code differs from it (result bundles and
-    planning notes are not code)."""
+    """Short git revision, with '+dirty' when the code differs from it (result bundles,
+    planning notes and prose are not code; run_bench.py rewrites README.md between cases)."""
     git = lambda *a: subprocess.run(["git", *a], capture_output=True, text=True,
                                     check=False).stdout.strip()
-    code = git("status", "--porcelain", "--", ".", ":!docs/results", ":!.planning")
+    code = git("status", "--porcelain", "--", ".", ":!docs/results", ":!.planning", ":!*.md")
     return git("rev-parse", "--short", "HEAD") + ("+dirty" if code else "")
 
 
 REVISION = revision()                     # the code this process runs, fixed at import
 
 
+def host():
+    """The processor and toolchain a result was measured on: elapsed times and time-limited
+    bounds are comparable only between results that share them."""
+    cpu = platform.processor()
+    if sys.platform == "win32":
+        import winreg
+        k = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE,
+                           r"HARDWARE\DESCRIPTION\System\CentralProcessor\0")
+        cpu = winreg.QueryValueEx(k, "ProcessorNameString")[0].strip()
+    return dict(cpu=cpu, threads=os.cpu_count(), python=platform.python_version(),
+                numpy=version("numpy"), scipy=version("scipy"))
+
+
+HOST = host()
+
+
 def provenance(p, **params):
-    return dict(revision=REVISION, instance=p["name"], key=p.get("key"), sha256=p.get("sha256"),
-                params=params)
+    return dict(revision=REVISION, host=HOST, instance=p["name"], key=p.get("key"),
+                sha256=p.get("sha256"), params=params)

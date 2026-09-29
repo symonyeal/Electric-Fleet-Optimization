@@ -3,6 +3,8 @@
     python run_bench.py            tables (docs/results/README.md) and figures (docs/results/fig)
     python run_bench.py --run      first recompute every benchmark and transit case
     python run_bench.py --grid     first recompute the charging-physics grid (M2/M1, R3/R1)
+        --missing                  only the cases and grid rows that have no bundle yet
+        --jobs N                   N cases at a time (elapsed times are then under shared load)
 
 Every number in the tables is read from a bundle that names the revision that produced it.
 """
@@ -12,6 +14,7 @@ import copy
 import json
 import subprocess
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import numpy as np
@@ -112,13 +115,18 @@ def verdicts():
     return rows
 
 
+def cpu(b):
+    """The processor a bundle was measured on, from its provenance."""
+    return ((b.get("provenance") or {}).get("host") or {}).get("cpu", "not recorded")
+
+
 def duals():
     rows = []
     for n in E:
         a, b = (bundle(OUT / "evrp" / f"{n}-R2-{d}.json") for d in ("ipm", "simplex"))
         if a and b:
             rows.append((n, *[(x["iterations"], x["pricing"], x["elapsed"], x["L"],
-                               x["converged"]) for x in (a, b)]))
+                               x["converged"], cpu(x)) for x in (a, b)]))
     return rows
 
 
@@ -147,11 +155,16 @@ def write_readme():
                      f"{'-' if B is None else runs(p, B[1])} |")
     D = duals()
     lines += ["", "## Interior versus simplex duals in R2 (CG-04)", "",
+              ("Seconds are wall-clock on the processor named, and compare only within a row. "
+              "The bound is the best (R2.2) from a completed exact pricing, within 1e-6 of the "
+              "master LP when converged; '-' when no exact pricing completed in its limit."),
+              "",
               ("| Instance | Iterations (IPM / simplex) | Pricing calls | Seconds | Bound "
-              "(IPM / simplex) | Converged |"), "|---|---:|---:|---:|---:|---|"]
+              "(IPM / simplex) | Converged | Processor |"), "|---|---:|---:|---:|---:|---|---|"]
     for n, a, b in D:
         lines.append(f"| {n} | {a[0]} / {b[0]} | {a[1]} / {b[1]} | {a[2]:.1f} / {b[2]:.1f} | "
-                     f"{fmt(a[3], 4)} / {fmt(b[3], 4)} | {a[4]} / {b[4]} |")
+                     f"{fmt(a[3], 4)} / {fmt(b[3], 4)} | {a[4]} / {b[4]} | "
+                     f"{a[5] if a[5] == b[5] else f'{a[5]} / {b[5]}'} |")
     lines += ["", "## Route 100 (Validation §3, TRN-09)", "",
               ("Illustrative battery, charger and cost parameters (data/scenarios/route100.toml);"
               " costs in illustrative CAD for the modeled window. M0 minimizes the fleet "
@@ -185,15 +198,19 @@ def write_readme():
                   ("Each row fixes the loss coefficient alpha (illustrative). M2 and R3 are "
                   "solved by outer approximation, M1 and R1 by HiGHS, on the same instance. "
                   "M2 against M1 compares cost; R3 against R1 compares the replayed route "
-                  "length, since R3 also prices energy and dwell time."), "",
+                  "length, since R3 also prices energy and dwell time. 'With' is filled only "
+                  "when OA certified its value; the OA gap is on the model's own objective, "
+                  "and 'Without' carries the status of the model without losses."), "",
                   ("| Model pair | Instance | Measure | alpha | Without | With | Increase | "
-                   "Status |"),
-                  "|---|---|---|---:|---:|---:|---:|---|"]
+                   "OA gap | Status | Seconds |"),
+                  "|---|---|---|---:|---:|---:|---:|---:|---|---:|"]
         for g in G:
             inc = None if g["base"] is None or g["loss"] is None else g["loss"] - g["base"]
+            gap = "-" if g.get("gap") is None else f"{100 * g['gap']:.3f}%"
             lines.append(f"| {g['pair']} | {g['instance']} | {g['measure']} | {g['alpha']:g} | "
-                         f"{fmt(g['base'], 3)} | {fmt(g['loss'], 3)} | {fmt(inc, 3)} | "
-                         f"{g['status']} |")
+                         f"{fmt(g['base'], 3)} ({g.get('base_status', '-')}) | "
+                         f"{fmt(g['loss'], 3)} | {fmt(inc, 3)} | {gap} | {g['status']} | "
+                         f"{fmt(g.get('elapsed'), 1)} |")
     lines += ["", "## Figures", "", "![E-n22-k4](fig/routes-E-n22-k4.png)", "",
               "![R2 duals](fig/r2-duals-E-n22-k4.png)", ""]
     tag = next((t for t in TRANSIT if bundle(OUT / "transit" / f"{t}-M1.json")), None)
@@ -373,15 +390,25 @@ def figures():
     plt.close(fig)
 
 
-def run():
-    for track, n, m, t, u in CASES:
-        subprocess.run([sys.executable, "run_case.py", track, n, m, "--time", str(t), *u],
-                       check=False)
+def out(case):
+    """The bundle run_case.py writes for a case of CASES."""
+    track, n, m, _, u = case
+    return OUT / track / (f"{n}-until{float(u[1]):g}h-{m}.json" if u else f"{n}-{m}.json")
 
 
-def grid():
+def run(missing=False, jobs=1):
+    """Every case of CASES, or with missing only those without a bundle, jobs at a time."""
+    Q = [k for k in CASES if not (missing and out(k).exists())]
+    cmd = lambda k: [sys.executable, "run_case.py", *k[:3], "--time", str(k[3]), *k[4]]
+    with ThreadPoolExecutor(jobs) as X:
+        list(X.map(lambda k: subprocess.run(cmd(k), check=False), Q))
+
+
+def grid(missing=False):
     """OA-04: M2 against M1 on Route 100 before 06:30, R3 against R1 on an E-n22-k4
-    sub-instance, over a declared grid of loss coefficients (illustrative)."""
+    sub-instance, over a declared grid of loss coefficients (illustrative). Each row is
+    written when it finishes; with missing, rows already in the bundle are kept."""
+    from checks.certificate import HOST, REVISION
     from checks.route import replay_charge
     from data.evrp import load, sub
     from data.scenario import load as scenario
@@ -389,26 +416,40 @@ def grid():
     from models.fleet import m1
     from models.recharge import r3
     from models.route import r1
-    out = []
-    with open("tests/fixtures/route100.json", encoding="utf-8") as f:
-        c = json.load(f)
+    f = OUT / "grid" / "grid.json"
+    G = [g for g in (bundle(f) or []) if missing]
+    have = {(g["pair"], g["alpha"]) for g in G}
+
+    def put(g, r, b):
+        G.append(dict(g, base_status=b["status"], U=r["U"], L=r["L"], gap=r["gap_rel"],
+                      status=r["status"], elapsed=r["elapsed"], revision=REVISION, host=HOST))
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text(json.dumps(G, indent=1) + "\n", encoding="utf-8")
+
+    with open("tests/fixtures/route100.json", encoding="utf-8") as fh:
+        c = json.load(fh)
     c = dict(c, trips=[t for t in c["trips"] if t["dep"] < 6.5 * 3600])
     v, _ = scenario("data/scenarios/route100.toml")
     v0 = copy.deepcopy(v)
     v0["charger"]["gamma"] = 0.0
-    base = m1(c, v0, name="route100-until6.5h", time_limit=600)["U"]
+    b1 = None
     for a in (3.3e-5, 6.7e-5, 1.3e-4):
+        if ("M2 / M1", a) in have:
+            continue
+        b1 = b1 or m1(c, v0, name="route100-until6.5h", time_limit=600)
         w = copy.deepcopy(v0)
         w["charger"]["alpha"] = a
         r = m2(c, w, name="route100-until6.5h", max_iter=40, time_limit=1800)
-        out.append(dict(pair="M2 / M1", instance="route100 before 06:30", measure="cost",
-                        alpha=a, base=base, loss=r["U"] if r["status"] == "optimal" else None,
-                        status=r["status"]))
+        put(dict(pair="M2 / M1", instance="route100 before 06:30", measure="cost", alpha=a,
+                 base=b1["U"], loss=r["U"] if r["status"] == "optimal" else None), r, b1)
     p = load("evrp-2019/E-n22-k4")
     q = sub(p, sorted(p["I"], key=lambda i: -p["D"][p["depot"], i])[:8], p["F"])
     sc, _ = scenario("data/scenarios/r3.toml")
-    zr1 = r1(q)["U"]
+    b3 = None
     for a in (0.0, 2.5e-4, 5e-4, 1e-3):
+        if ("R3 / R1", a) in have:
+            continue
+        b3 = b3 or r1(q)
         s = copy.deepcopy(sc)
         s["charger"]["alpha"] = a
         r = r3(q, s, max_iter=60, time_limit=1800)
@@ -416,21 +457,21 @@ def grid():
         if r["status"] == "optimal":
             z = replay_charge(q, s, r["routes"], {tuple(map(int, k.split(":"))): qt
                                                   for k, qt in r["charges"].items()})["length"]
-        out.append(dict(pair="R3 / R1", instance=q["name"], measure="route length", alpha=a,
-                        base=zr1, loss=z, cost=r["U"], status=r["status"]))
-    (OUT / "grid").mkdir(parents=True, exist_ok=True)
-    (OUT / "grid" / "grid.json").write_text(json.dumps(out, indent=1), encoding="utf-8")
+        put(dict(pair="R3 / R1", instance=q["name"], measure="route length", alpha=a,
+                 base=b3["U"], loss=z), r, b3)
 
 
 if __name__ == "__main__":
     a = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     a.add_argument("--run", action="store_true")
     a.add_argument("--grid", action="store_true")
+    a.add_argument("--missing", action="store_true")
+    a.add_argument("--jobs", type=int, default=1)
     x = a.parse_args()
     if x.run:
-        run()
+        run(x.missing, x.jobs)
     if x.grid:
-        grid()
+        grid(x.missing)
     figures()
     write_readme()
     write_summary()

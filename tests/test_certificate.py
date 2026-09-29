@@ -54,13 +54,22 @@ def test_record_requires_solver_time_and_provenance():
 
 
 def test_revision_is_fixed_at_import_and_ignores_results():
-    """A bundle names the code that ran: result files and planning notes are not code."""
+    """A bundle names the code that ran: result files, planning notes and prose are not code."""
     from pathlib import Path
     from checks.certificate import REVISION, revision
-    f = Path("docs/results/_probe.json")
-    f.write_text("{}", encoding="utf-8")
+    F = [Path("docs/results/_probe.json"), Path("_probe.md")]
+    for f in F:
+        f.write_text("{}", encoding="utf-8")
     try:
-        assert revision() == REVISION or not REVISION.endswith("+dirty")
-        assert revision().endswith("+dirty") == REVISION.endswith("+dirty")
+        assert revision() == REVISION
+        assert revision.__wrapped__() == REVISION   # recomputed, not the cached value
     finally:
-        f.unlink()
+        for f in F:
+            f.unlink()
+
+
+def test_provenance_names_the_host():
+    """Elapsed times from different machines are not comparable; each bundle names its own."""
+    from checks.certificate import provenance
+    h = provenance(dict(name="x"))["host"]
+    assert h["cpu"] and h["threads"] >= 1 and h["python"] and h["numpy"] and h["scipy"]
