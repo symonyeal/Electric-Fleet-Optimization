@@ -179,6 +179,39 @@ connections; integer n encodes plug count. Symmetry breaking z_k >= z_k+1 is
 permitted only among fully identical candidate buses. No symmetry row may change
 which bus types or initial conditions are available.
 
+**3a. M1 as implemented: connection form**
+
+The per-bus form above indexes identical candidate buses, so every relabeling of an
+optimal schedule is again optimal; with 20 or more buses this symmetry weakens the
+branch-and-bound bound. `models/fleet.py` therefore writes M1 without a bus index, in
+the connection form of M0. x_ij = 1 when trip j is the next trip after trip i on a
+bus; x_0j and x_i0 are pull-outs and pull-ins, and the fleet is sum x_0j, as in M0.
+Rows (2) and (3) become in- and out-degree rows over these arcs.
+
+Energy is carried per trip. a_j is the energy on arrival at j's first stop, and y_j
+the energy on departing it: a_j = y_i - E_i - e_ij for the chosen predecessor, or
+s0 B - e_0j after a pull-out, both as two-sided big-M rows with M = smax B + e. Then
+y_j = a_j + Delta sum_t p_jt. The bound rB <= a_j keeps the deadhead above reserve,
+and rB + E_j <= y_j takes the trip's energy at its start, as in §1. Pull-in rows keep
+the last deadhead above reserve and define the end-of-day energy z_i. The objective
+charges the overnight restore to s0 B at the depot price.
+
+Charging is restricted in two stated ways. A bus charges only at the first stop of its
+next trip, when that stop is a candidate site, in the slots of a window before the
+departure (`time.window` in the scenario). A slot counts only if it lies wholly after
+the predecessor's arrival there, deadhead included: u_jt <= x_0j + sum_{i present} x_ij,
+and exactly one predecessor is chosen. So a bus deadheads first and then charges, and
+never charges at a trip's end stop when its next trip starts elsewhere. These are
+restrictions: the per-bus form admits every schedule of this one, so its optimum is
+no higher. On Route 100 consecutive trips alternate terminals, and both terminals are
+sites.
+
+Rows (5) and (6) are unchanged, summed per site and slot over the windows present.
+The replay in `checks/schedule.py` simulates each bus slot by slot. It checks energy,
+windows, presence, plugs and grid, and recomputes the cost from the schedule alone.
+`checks/enum_transit.py` solves tiny one-site timetables by enumerating every partition
+of the trips into chains, with a charging MILP written separately for each partition.
+
 **4. M1-Q and M2: convex nonlinear charging**
 
 For M1-Q, add

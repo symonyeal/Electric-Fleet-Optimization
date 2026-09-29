@@ -1,0 +1,224 @@
+{
+ "model": "M0",
+ "instance": "route100-until8h",
+ "trips": 54,
+ "fleet": 16,
+ "flow": 16,
+ "hopcroft_karp": 16,
+ "ipm": 37.99999995174408,
+ "ipm_status": "optimal",
+ "ipm_fractional": 216,
+ "duties": [
+  [
+   "15462049",
+   "15461897",
+   "15462027",
+   "15461972",
+   "15462019"
+  ],
+  [
+   "15462050",
+   "15461929",
+   "15462075",
+   "15461936",
+   "15461989"
+  ],
+  [
+   "15462051",
+   "15461896",
+   "15462013",
+   "15461937",
+   "15462062"
+  ],
+  [
+   "15462093",
+   "15461984",
+   "15462067",
+   "15461878"
+  ],
+  [
+   "15462003",
+   "15461944",
+   "15462059",
+   "15461916"
+  ],
+  [
+   "15462052",
+   "15461935",
+   "15462006",
+   "15461959"
+  ],
+  [
+   "15462053",
+   "15461954",
+   "15462024",
+   "15461956"
+  ],
+  [
+   "15462056",
+   "15461971",
+   "15462060",
+   "15461966"
+  ],
+  [
+   "15462025",
+   "15461895",
+   "15462080"
+  ],
+  [
+   "15462058",
+   "15461953",
+   "15462007"
+  ],
+  [
+   "15462020",
+   "15461926",
+   "15462000"
+  ],
+  [
+   "15462094",
+   "15461985",
+   "15462026"
+  ],
+  [
+   "15462055",
+   "15461965"
+  ],
+  [
+   "15462073",
+   "15461938"
+  ],
+  [
+   "15461990",
+   "15461939"
+  ],
+  [
+   "15462095"
+  ]
+ ],
+ "blocks": 16,
+ "block_violations": 0,
+ "pairs": 667,
+ "scenario": {
+  "time.delta": [
+   "s",
+   "illustrative"
+  ],
+  "time.window": [
+   "s",
+   "illustrative"
+  ],
+  "time.layover": [
+   "s",
+   "illustrative"
+  ],
+  "deadhead.speed": [
+   "km/h",
+   "illustrative"
+  ],
+  "deadhead.detour": [
+   "1",
+   "illustrative"
+  ],
+  "depot.lat": [
+   "deg",
+   "illustrative"
+  ],
+  "depot.lon": [
+   "deg",
+   "illustrative"
+  ],
+  "battery.B": [
+   "kWh",
+   "illustrative"
+  ],
+  "battery.reserve": [
+   "1",
+   "illustrative"
+  ],
+  "battery.smax": [
+   "1",
+   "illustrative"
+  ],
+  "battery.s0": [
+   "1",
+   "illustrative"
+  ],
+  "battery.kappa": [
+   "kWh/km",
+   "illustrative"
+  ],
+  "charger.P": [
+   "kW",
+   "illustrative"
+  ],
+  "charger.eta": [
+   "1",
+   "illustrative"
+  ],
+  "sites.marpole.nbar": [
+   "plugs",
+   "illustrative"
+  ],
+  "sites.marpole.G0": [
+   "kW",
+   "illustrative"
+  ],
+  "sites.marpole.hbar": [
+   "kW",
+   "illustrative"
+  ],
+  "sites.marpole.L": [
+   "kW",
+   "illustrative"
+  ],
+  "sites.station22.nbar": [
+   "plugs",
+   "illustrative"
+  ],
+  "sites.station22.G0": [
+   "kW",
+   "illustrative"
+  ],
+  "sites.station22.hbar": [
+   "kW",
+   "illustrative"
+  ],
+  "sites.station22.L": [
+   "kW",
+   "illustrative"
+  ],
+  "cost.F": [
+   "CAD/bus/day",
+   "illustrative"
+  ],
+  "cost.deadhead": [
+   "CAD/km",
+   "illustrative"
+  ],
+  "cost.energy": [
+   "CAD/kWh",
+   "illustrative"
+  ],
+  "cost.depot_energy": [
+   "CAD/kWh",
+   "illustrative"
+  ],
+  "cost.peak": [
+   "CAD/kW/day",
+   "illustrative"
+  ],
+  "cost.site": [
+   "CAD/day",
+   "illustrative"
+  ],
+  "cost.plug": [
+   "CAD/plug/day",
+   "illustrative"
+  ],
+  "cost.upgrade": [
+   "CAD/kW/day",
+   "illustrative"
+  ]
+ }
+}

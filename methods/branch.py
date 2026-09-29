@@ -55,13 +55,16 @@ def node(c, Aub, bub, Aeq, beq, l, u, lp, delta=None):
 
 
 def bnb(c, A, lo, hi, l, u, integ, lp="ipm", validate=None, delta=None, eps_abs=1e-6,
-        eps_rel=1e-6, tol_int=1e-6, node_limit=10000):
-    """Best-first branch-and-bound, most-fractional branching, lexicographic ties.
+        eps_rel=1e-6, tol_int=1e-6, node_limit=10000, priority=None):
+    """Branch-and-bound: depth-first until the first incumbent (the child nearer the LP value
+    first), best-first after; branching on the fractional variable of highest priority, then
+    most fractional, then lowest index.
 
     INPUT   lp ........ "ipm" (methods/ipm.py) or "highs-ipm" for node LPs
             validate .. v -> (ok, U): an independent check of an integral candidate; the default
                         accepts it at c'v
             delta ..... stop node IPMs early at relative gap delta (their bounds stay valid)
+            priority .. per variable; higher is branched first (default: all equal)
     OUTPUT  status, U, L (global lower bound), v, nodes, pruned (by reason), trajectory
             [(nodes, L, U)], inexact (bound and box of each early-stopped node), unresolved,
             rejected
@@ -70,11 +73,16 @@ def bnb(c, A, lo, hi, l, u, integ, lp="ipm", validate=None, delta=None, eps_abs=
     J = np.flatnonzero(integ)
     Aub, bub, Aeq, beq = split(A, lo, hi)
     tol = lambda U: eps_abs + eps_rel * max(1.0, abs(U)) if math.isfinite(U) else 0.0
-    U, best, heap, seq = math.inf, None, [(-math.inf, 0, l, u)], 1
+    pr = np.zeros(len(c)) if priority is None else np.asarray(priority, float)
+    U, best, heap, dive, seq = math.inf, None, [], [(-math.inf, 0, l, u)], 1
     nodes, pruned, traj, inexact, unresolved, rejected = 0, Counter(), [], [], [], 0
     t0 = time.perf_counter()
-    while heap and nodes < node_limit:
-        Lp, _, ln, un = heapq.heappop(heap)
+    while (heap or dive) and nodes < node_limit:
+        if dive and math.isfinite(U):                   # first incumbent: switch to best-first
+            for nd in dive:
+                heapq.heappush(heap, nd)
+            dive = []
+        Lp, _, ln, un = dive.pop() if dive else heapq.heappop(heap)
         if Lp >= U - tol(U):
             pruned["bound"] += 1
             continue
@@ -105,15 +113,22 @@ def bnb(c, A, lo, hi, l, u, integ, lp="ipm", validate=None, delta=None, eps_abs=
                     U, best = Uv, v2
                 pruned["integral"] += 1
             else:
-                k = J[np.argmax(frac)]                          # most fractional, first on ties
+                F = np.flatnonzero(frac > tol_int)
+                k = J[F[np.lexsort((F, -frac[F], -pr[J[F]]))[0]]]
                 ua, lb_ = un.copy(), ln.copy()
                 ua[k], lb_[k] = math.floor(v[k]), math.ceil(v[k])
-                for lc, uc in ((ln, ua), (lb_, un)):
-                    heapq.heappush(heap, (L, seq, lc, uc))
+                kids = [(ln, ua), (lb_, un)]
+                if v[k] - math.floor(v[k]) >= 0.5:              # nearer child popped first
+                    kids.reverse()
+                for lc, uc in kids[::-1]:                     # a stack pops the nearer child
+                    if math.isfinite(U):
+                        heapq.heappush(heap, (L, seq, lc, uc))
+                    else:
+                        dive.append((L, seq, lc, uc))
                     seq += 1
-        open_ = [h[0] for h in heap] + unresolved
+        open_ = [h[0] for h in heap] + [d[0] for d in dive] + unresolved
         traj.append((nodes, min(open_ + [U]) if open_ else U, U))
-    open_ = [h[0] for h in heap if h[0] < U - tol(U)] + unresolved
+    open_ = [h[0] for h in heap + dive if h[0] < U - tol(U)] + unresolved
     Lg = min(open_ + [U]) if open_ else U
     if math.isfinite(U):
         status = "optimal" if U - Lg <= tol(U) else "feasible_limit"

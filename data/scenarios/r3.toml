@@ -1,0 +1,18 @@
+# R3 scenario (Routing §6). The CEC benchmark has no time or price data and abstract units:
+# "u" is its distance unit and "e" its energy unit (e = h * u). Everything here is illustrative.
+
+[time]
+speed = {value = 60.0, unit = "u/h", source = "illustrative"}
+service = {value = 0.1, unit = "h", source = "illustrative"}           # sigma_i, every customer
+T = {value = 8.0, unit = "h", source = "illustrative"}                 # route duration limit
+tau_min = {value = 0.05, unit = "h", source = "illustrative"}          # least dwell at a used station
+
+[charger]
+P = {value = 100.0, unit = "e/h", source = "illustrative"}             # battery-side power
+eta = {value = 0.92, unit = "1", source = "illustrative"}
+alpha = {value = 5.0e-4, unit = "h/e", source = "illustrative"}        # 5% extra at P
+
+[cost]
+distance = {value = 1.0, unit = "cost/u", source = "illustrative"}
+energy = {value = 0.5, unit = "cost/e", source = "illustrative"}        # station grid energy
+dwell = {value = 5.0, unit = "cost/h", source = "illustrative"}         # driver time at stations
