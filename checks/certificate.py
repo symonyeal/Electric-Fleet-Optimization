@@ -4,7 +4,9 @@ A minimization result carries a feasible objective U, a valid lower bound L, and
 when both are finite. A gap below -tolerance is a defect to investigate, never clamped.
 """
 
+import functools
 import math
+import subprocess
 
 STATUS = {"optimal", "feasible_limit", "no_incumbent", "infeasible", "unbounded",
           "local", "numerical", "stall", "limit"}
@@ -40,3 +42,16 @@ def record(model, instance, status, U=None, L=None, *, solver, elapsed, provenan
                 certified=certified(U, L, eps_abs, eps_rel),
                 defect="negative gap" if g is not None and g < -tol else None,
                 solver=solver, elapsed=elapsed, provenance=provenance, **kw)
+
+
+@functools.cache
+def revision():
+    """Short git revision, with '+dirty' when the working tree differs from it."""
+    git = lambda *a: subprocess.run(["git", *a], capture_output=True, text=True,
+                                    check=False).stdout.strip()
+    return git("rev-parse", "--short", "HEAD") + ("+dirty" if git("status", "--porcelain") else "")
+
+
+def provenance(p, **params):
+    return dict(revision=revision(), instance=p["name"], key=p.get("key"), sha256=p.get("sha256"),
+                params=params)

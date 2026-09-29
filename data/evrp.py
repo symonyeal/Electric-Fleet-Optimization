@@ -89,4 +89,14 @@ def load(key, root=FETCHED):
         fetch([key], root)
     if hashlib.sha256(f.read_bytes()).hexdigest() != SHA[f"{key}.evrp"]:
         raise ValueError(f"{key}: SHA-256 differs from data/evrp.sha256")
-    return read(f)
+    return dict(read(f), key=key, sha256=SHA[f"{key}.evrp"])
+
+
+def sub(p, I, F):
+    """The instance restricted to the depot, customers I and stations F, renumbered in that
+    order; VEHICLES becomes the capacity bound ceil(sum b / C)."""
+    v = [p["depot"], *I, *F]
+    X, b = p["X"][v], p["b"][v]
+    return dict(name=f"{p['name']}[{','.join(str(k + 1) for k in I)}]", NAME="", X=X, D=dist(X),
+                depot=0, I=list(range(1, len(I) + 1)), F=list(range(len(I) + 1, len(v))), b=b,
+                C=p["C"], Q=p["Q"], h=p["h"], K=int(np.ceil(b.sum() / p["C"] - 1e-9)), opt=None)
