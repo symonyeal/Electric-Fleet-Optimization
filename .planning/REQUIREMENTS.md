@@ -45,9 +45,9 @@ Formulation labels (R1.3, (A3), (7), ...) refer to `docs/ROUTING.md`, `docs/MODE
 
 ### Branch-and-bound
 
-- [ ] **BNB-01**: User can run the educational branch-and-bound on a bounded MILP with LP nodes solved by the textbook IPM or `highs-ipm`, most-fractional branching, and pruning only on certified bounds (A3)
-- [ ] **BNB-02**: On tiny R1 instances the tree reaches the HiGHS optimum and reports nodes, the global bound trajectory, and the bounds obtained at inexactly solved nodes
-- [ ] **BNB-03**: The tree accepts an incumbent only after fixing integers, re-solving the continuous variables, and passing replay
+- [x] **BNB-01**: User can run the educational branch-and-bound on a bounded MILP with LP nodes solved by the textbook IPM or `highs-ipm`, most-fractional branching, and pruning only on certified bounds (A3)
+- [x] **BNB-02**: On tiny R1 instances the tree reaches the HiGHS optimum and reports nodes, the global bound trajectory, and the bounds obtained at inexactly solved nodes
+- [x] **BNB-03**: The tree accepts an incumbent only after fixing integers, re-solving the continuous variables, and passing replay
 
 ### Column generation
 
@@ -148,9 +148,9 @@ Formulation labels (R1.3, (A3), (7), ...) refer to `docs/ROUTING.md`, `docs/MODE
 | EVRP-04 | Phase 3 | Pending |
 | EVRP-05 | Phase 3 | Pending |
 | EVRP-06 | Phase 3 | Pending |
-| BNB-01 | Phase 4 | Pending |
-| BNB-02 | Phase 4 | Pending |
-| BNB-03 | Phase 4 | Pending |
+| BNB-01 | Phase 4 | Complete |
+| BNB-02 | Phase 4 | Complete |
+| BNB-03 | Phase 4 | Complete |
 | CG-01 | Phase 5 | Pending |
 | CG-02 | Phase 5 | Pending |
 | CG-03 | Phase 5 | Pending |
