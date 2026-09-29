@@ -23,7 +23,7 @@ published number from committed commands.
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Foundations and EVRP data** - Result contract, pinned benchmark files, keyword reader, independent route replay, toolchain facts (completed 2026-09-28)
-- [ ] **Phase 2: Interior-point core** - Textbook primal-dual LP/QP method with bound (A3) and early-terminated duals
+- [x] **Phase 2: Interior-point core** - Textbook primal-dual LP/QP method with bound (A3) and early-terminated duals (completed 2026-09-29)
 - [ ] **Phase 3: Exact EVRP MILP** - Station-path multigraph, R0/R1/R1-TR, first verdicts on the published values
 - [ ] **Phase 4: Branch-and-bound with interior-point nodes** - Educational tree with certified pruning on tiny R1 instances
 - [ ] **Phase 5: Column-generation bound** - R2 with interior versus simplex duals; bounds for the 2019 E set
@@ -74,9 +74,9 @@ Plans:
 
 Plans:
 
-- [ ] 02-01: Standard-form LP method (A1)-(A2), presolve of fixed variables, residual reporting
-- [ ] 02-02: Bound (A3), status classification, early termination, factorization statistics
-- [ ] 02-03: Convex QP extension and tests on Vanderbei Ch. 24 examples
+- [x] 02-01: Standard-form LP method (A1)-(A2), presolve of fixed variables, residual reporting
+- [x] 02-02: Bound (A3), status classification, early termination, factorization statistics
+- [x] 02-03: Convex QP extension and tests on Vanderbei Ch. 24 examples
 
 ### Phase 3: Exact EVRP MILP
 
@@ -265,7 +265,7 @@ Phases execute in numeric order. Phases 2, 3, and 6 depend only on Phase 1, so a
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Foundations and EVRP data | 3/3 | Complete    | 2026-09-28 |
-| 2. Interior-point core | 0/3 | Not started | - |
+| 2. Interior-point core | 3/3 | Complete    | 2026-09-29 |
 | 3. Exact EVRP MILP | 0/3 | Not started | - |
 | 4. Branch-and-bound with interior-point nodes | 0/2 | Not started | - |
 | 5. Column-generation bound | 0/3 | Not started | - |
