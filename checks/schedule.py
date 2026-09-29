@@ -38,3 +38,82 @@ def replay(c, duties, sc, tol=1e-9):
         if seen.get(k, 0) != 1:
             D.append(("missing" if k not in seen else "repeat", k))
     return dict(ok=not D, defects=D, fleet=len(duties), deadhead_km=dh)
+
+
+def replay_energy(c, v, duties, plan, infra, tol=1e-6, loss=False):
+    """Replay an M1 (or, with loss, M2) schedule slot by slot, independently of its rows
+    (Models §3-§4).
+
+    INPUT   duties .. trip ids per bus; plan .. {trip id: {slot: battery kW}} charged before
+            that trip at its first stop; infra .. {site: dict(n=plugs, h=kW upgrade)}
+            loss .... grid power p/eta + alpha p^2 (10), and the taper p <= P (1 - e/B) (11)
+    OUTPUT  ok, defects, cost (recomputed from the schedule alone), parts, fleet.
+            Kinds: those of replay(), energy, overcharge, window, presence, power, site, plugs,
+            grid, taper.
+    """
+    base = replay(c, duties, dict(speed=v["deadhead"]["speed"], detour=v["deadhead"]["detour"],
+                                  layover=v["time"]["layover"]))
+    D = list(base["defects"])
+    T, S = {t["id"]: t for t in c["trips"]}, c["stops"]
+    b, ch, co, dl = v["battery"], v["charger"], v["cost"], v["time"]["delta"]
+    B, kap, eta, det = b["B"], b["kappa"], ch["eta"], v["deadhead"]["detour"]
+    rB, top, s0B, h = b["reserve"] * B, b["smax"] * B, b["s0"] * B, dl / 3600
+    depot = dict(lat=v["depot"]["lat"], lon=v["depot"]["lon"])
+    site = {stop: s for s, d in v["sites"].items() for stop in d["stops"]}
+    use, km_dh, kwh, restore = {}, 0.0, 0.0, 0.0
+    for d in duties:
+        if any(k not in T for k in d):
+            continue
+        km = great_circle_km(depot, S[T[d[0]]["first"]]) * det
+        km_dh, e, here = km_dh + km, s0B - kap * km, None
+        if e < rB - tol:
+            D.append(("energy", f"pull-out to {d[0]} arrives with {e:.6g}"))
+        for q, k in enumerate(d):
+            t = T[k]
+            for s_, kw in sorted(plan.get(k, {}).items()):
+                s = site.get(t["first"])
+                if s is None or s not in infra:
+                    D.append(("site", f"{k} charges at {t['first']}, not an open site"))
+                if not (s_ * dl >= t["dep"] - v["time"]["window"] - tol
+                        and (s_ + 1) * dl <= t["dep"] + tol):
+                    D.append(("window", f"{k} slot {s_}"))
+                if here is not None and s_ * dl < here - tol:
+                    D.append(("presence", f"{k} slot {s_} before the bus arrives"))
+                if kw > ch["P"] + tol or kw < -tol:
+                    D.append(("power", f"{k} slot {s_}: {kw:.6g} kW"))
+                e += h * kw
+                grid = kw / eta + (ch["alpha"] * kw * kw if loss else 0.0)       # (10)
+                if loss and kw > ch["P"] * (1 - e / B) + tol:                    # (11)
+                    D.append(("taper", f"{k} slot {s_}: {kw:.6g} kW at {e:.6g} kWh"))
+                kwh += h * grid
+                u = use.setdefault((s, s_), [0, 0.0])
+                u[0], u[1] = u[0] + 1, u[1] + grid
+            if e > top + tol:
+                D.append(("overcharge", f"{k} departs with {e:.6g}"))
+            if e - kap * t["km"] < rB - tol:
+                D.append(("energy", f"{k} would end below reserve"))
+            e -= kap * t["km"]
+            nxt = S[T[d[q + 1]]["first"]] if q + 1 < len(d) else depot
+            km = great_circle_km(S[t["last"]], nxt) * det
+            km_dh, e = km_dh + km, e - kap * km
+            here = t["arr"] + 3600 * km / v["deadhead"]["speed"]
+            if e < rB - tol:
+                D.append(("energy", f"after {k} the bus reaches its next stop with {e:.6g}"))
+        restore += (s0B - e) / eta
+    peak = {s: v["sites"][s]["L"] for s in infra}
+    for (s, s_), (k, kw) in sorted(use.items(), key=lambda z: (str(z[0][0]), z[0][1])):
+        if s not in infra:
+            continue
+        L = v["sites"][s]["L"]
+        if k > infra[s]["n"]:
+            D.append(("plugs", f"{s} slot {s_}: {k} > {infra[s]['n']}"))
+        if L + kw > v["sites"][s]["G0"] + infra[s]["h"] + tol:
+            D.append(("grid", f"{s} slot {s_}: {L + kw:.6g} kW"))
+        peak[s] = max(peak[s], L + kw)
+    parts = dict(buses=co["F"] * len(duties), deadhead=co["deadhead"] * km_dh,
+                 energy=co["energy"] * kwh, depot_energy=co["depot_energy"] * restore,
+                 sites=co["site"] * len(infra),
+                 plugs=co["plug"] * sum(i["n"] for i in infra.values()),
+                 upgrade=co["upgrade"] * sum(i["h"] for i in infra.values()),
+                 peak=co["peak"] * sum(peak.values()))
+    return dict(ok=not D, defects=D, cost=sum(parts.values()), parts=parts, fleet=len(duties))

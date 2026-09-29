@@ -239,3 +239,71 @@ def test_normal_equations_with_dependent_rows():
     c, Ai, bi, Ae, be, l, u = CASES["duplicate equality rows"]
     r = ipm(*standard(c, Ai, bi, Ae, be, l, u), kkt="normal")
     assert r["status"] == "optimal" and r["f"] == pytest.approx(1.0, abs=1e-7)
+
+
+# Convex constraints h(x) <= 0 (Vanderbei Ch. 25): the barrier step of the fixed-integer M2.
+
+def disc(r=1.0):
+    """min -x1 - x2 s.t. x1^2 + x2^2 <= r^2, 0 <= x <= 2: x* = (r, r)/sqrt(2), f* = -r sqrt(2)."""
+    import scipy.sparse as sp
+
+    def h(x):
+        return np.array([x[0] ** 2 + x[1] ** 2 - r * r])
+
+    def J(x):
+        return sp.csr_array(np.array([[2 * x[0], 2 * x[1]]]))
+
+    def H(x, lam):
+        return sp.diags_array(np.array([2 * lam[0], 2 * lam[0]]))
+
+    return h, J, H
+
+
+def test_convex_constraint_disc():
+    h, J, H = disc()
+    r = ipm(np.array([-1.0, -1]), np.zeros((0, 2)), np.zeros(0), np.zeros(2), np.full(2, 2.0),
+            h=h, Jh=J, Hh=H)
+    assert r["status"] == "optimal"
+    assert r["x"] == pytest.approx(np.full(2, 2 ** -0.5), abs=1e-7)
+    assert r["f"] == pytest.approx(-(2 ** 0.5), abs=1e-7)
+    assert r["L"] <= r["f"] + 1e-9 and r["L"] == pytest.approx(r["f"], abs=1e-6)
+    assert r["lam"][0] == pytest.approx(2 ** -0.5, abs=1e-6)       # KKT: 1 = 2 lam x_i
+
+
+@pytest.mark.parametrize("seed", range(5))
+def test_separable_loss_rows_against_tangent_lp(seed):
+    """min c'x over a random LP plus rows g_k >= p_k/eta + alpha p_k^2: the value lies between
+    the LP with many tangent cuts (a relaxation) and with many secants (a restriction)."""
+    import scipy.sparse as sp
+    g = np.random.default_rng(seed)
+    k, eta, alpha = 4, 0.9, 0.05
+    n = 2 * k                                            # x = (p_1..p_k, g_1..g_k)
+    c = np.r_[-g.uniform(1, 3, k), np.full(k, 1.0)]      # reward p, pay for g
+    A = np.r_[np.ones(k), np.zeros(k)][None, :]          # sum p = S
+    b = np.array([g.uniform(1, 3 * k)])
+    P, G = np.arange(k), np.arange(k, n)
+
+    def h(x):
+        return x[P] / eta + alpha * x[P] ** 2 - x[G]
+
+    def J(x):
+        return sp.csr_array((np.r_[1 / eta + 2 * alpha * x[P], -np.ones(k)],
+                             (np.r_[np.arange(k), np.arange(k)], np.r_[P, G])), shape=(k, n))
+
+    def H(x, lam):
+        d = np.zeros(n)
+        d[P] = 2 * alpha * lam
+        return sp.diags_array(d)
+
+    r = ipm(c, A, b, np.zeros(n), np.full(n, 10.0), h=h, Jh=J, Hh=H)
+    lo = hi = None
+    grid = np.linspace(0, 10, 201)
+    T = [np.r_[np.eye(k)[i] * (1 / eta + 2 * alpha * s), -np.eye(k)[i]] for s in grid for i in P]
+    tb = [alpha * s * s for s in grid for _ in P]
+    lo = linprog(c, A_ub=np.array(T), b_ub=tb, A_eq=A, b_eq=b, bounds=(0, 10), method="highs-ds")
+    S = [np.r_[np.eye(k)[i] * (1 / eta + alpha * (s0 + s1)), -np.eye(k)[i]]
+         for s0, s1 in itertools.pairwise(grid) for i in P]
+    sb = [alpha * s0 * s1 for s0, s1 in itertools.pairwise(grid) for _ in P]
+    hi = linprog(c, A_ub=np.array(S), b_ub=sb, A_eq=A, b_eq=b, bounds=(0, 10), method="highs-ds")
+    assert r["status"] == "optimal" and lo.fun - 1e-7 <= r["f"] <= hi.fun + 1e-7
+    assert r["L"] <= r["f"] + 1e-9 and hi.fun - lo.fun < 1e-3

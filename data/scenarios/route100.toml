@@ -24,6 +24,8 @@ kappa = {value = 1.3, unit = "kWh/km", source = "illustrative"}         # consum
 [charger]
 P = {value = 450.0, unit = "kW", source = "illustrative"}              # the pilot charged fully in 4-7 min
 eta = {value = 0.92, unit = "1", source = "illustrative"}
+alpha = {value = 6.7e-5, unit = "1/kW", source = "illustrative"}       # M2 loss: 3% extra at P
+gamma = {value = 1.0e-4, unit = "CAD/(kW^2 h)", source = "illustrative"}  # M1-Q stress proxy
 
 [sites.marpole]
 name = "Marpole Loop"
