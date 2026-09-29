@@ -1,0 +1,190 @@
+# Requirements: Electric Fleet Model
+
+**Defined:** 2026-09-28
+**Core Value:** Every reported number is certified: a replayed feasible solution and a valid lower bound, with the gap stated, or an explicit status saying why not.
+
+Formulation labels (R1.3, (A3), (7), ...) refer to `docs/ROUTING.md`, `docs/MODELS.md`, and `docs/ALGORITHMS.md`.
+
+## v1 Requirements
+
+### Foundations
+
+- [ ] **FND-01**: User can install the project into the system Python 3.14 from `requirements.txt` and get `pytest`, `ruff check`, and `pip check` passing
+- [ ] **FND-02**: User can read a toolchain note stating the installed SciPy/HiGHS versions and whether `milp`, `highs-ipm` (including duals before crossover), and `trust-constr` behave as documented on Python 3.14/Windows
+- [ ] **FND-03**: Every solve returns a result record with the status taxonomy of Algorithms §8, the solver's own code and message, U, L, a gap only when both are valid, residuals, elapsed time, and provenance
+- [ ] **FND-04**: A GitHub Actions workflow runs `pytest` and `ruff` on committed fixtures for every push to `main`
+
+### Data
+
+- [ ] **DATA-01**: User can fetch the 41 EVRP files from the pinned evrp-python commit, and every read verifies the file's SHA-256 against the committed manifest
+- [ ] **DATA-02**: The EVRP reader parses both header variants by keyword, checks every section count, and rejects any other edge-weight type
+- [ ] **DATA-03**: The textbook chapter references in `docs/SOURCES.md` are checked against both tables of contents and corrected where they differ
+
+### Checks
+
+- [ ] **CHK-01**: User can replay any route file against an instance and receive coverage, load, battery (depot legs included), station and depot resets, the route count, and the length recomputed from coordinates
+- [ ] **CHK-02**: User can convert evrp-python's printed tours (0-based identifiers) into the exchange format and replay them
+
+### Interior-point core
+
+- [ ] **IPM-01**: User can solve a standard-form LP with the textbook primal-dual method (A1), fraction-to-boundary steps, and stopping rule (A2), receiving x, y, s, and a status
+- [ ] **IPM-02**: The method's optimal values agree with `highs-ds` on Vanderbei's worked examples and on random feasible bounded LPs
+- [ ] **IPM-03**: For boxed LPs, the method reports the bound (A3) at every iterate, and it never exceeds the `highs-ds` optimum beyond tolerance
+- [ ] **IPM-04**: User can solve a convex QP by the same method (Vanderbei Ch. 24), with KKT residuals below tolerance
+- [ ] **IPM-05**: User can stop the method at a prescribed relative gap delta and receive the interior duals
+- [ ] **IPM-06**: Each solve reports matrix dimensions, factor nonzeros, factorization and solve times, and any regularization, with residuals against the unregularized equations
+
+### Routing models
+
+- [ ] **EVRP-01**: User can build the station graph and the Pareto station paths P_ij for any instance and read the filtered path counts
+- [ ] **EVRP-02**: User can solve R1 (free fleet, capacity bound on the route count) with HiGHS, and every returned solution passes the replay of CHK-01
+- [ ] **EVRP-03**: User can solve R0 on the same instance and read z(R1)-z(R0)
+- [ ] **EVRP-04**: On sub-instances of at most six customers, R1, R1-TR (depot split), and brute-force enumeration agree on the optimal value
+- [ ] **EVRP-05**: User can run evrp-python's GSGA from an outside checkout and replay its solutions, or the comparison labels its published values as unreplayed
+- [ ] **EVRP-06**: For each of the seven 2019 E instances, a result states certified optimal, bracketed with gap, or open, against the report's value and evrp-python's
+
+### Branch-and-bound
+
+- [ ] **BNB-01**: User can run the educational branch-and-bound on a bounded MILP with LP nodes solved by the textbook IPM or `highs-ipm`, most-fractional branching, and pruning only on certified bounds (A3)
+- [ ] **BNB-02**: On tiny R1 instances the tree reaches the HiGHS optimum and reports nodes, the global bound trajectory, and the bounds obtained at inexactly solved nodes
+- [ ] **BNB-03**: The tree accepts an incumbent only after fixing integers, re-solving the continuous variables, and passing replay
+
+### Column generation
+
+- [ ] **CG-01**: User can solve R2's restricted master by the early-terminated textbook IPM and by HiGHS simplex, reading duals from each
+- [ ] **CG-02**: User can price exactly over ng-routes with load and battery resources on the station-path multigraph; heuristic pricing is labeled and never produces a bound
+- [ ] **CG-03**: The bound (R2.2) is evaluated at every iteration with exact pricing and never exceeds a replayed feasible length
+- [ ] **CG-04**: User can compare interior and simplex duals by outer iterations, pricing calls, time, and final bound on the 2019 E set
+- [ ] **CG-05**: The restricted master solved as a MILP over generated columns yields a replayed upper bound, and EVRP-06's statuses are updated with R2's bounds
+
+### Transit models
+
+- [ ] **TRN-01**: User can build a service-day instance from a pinned TransLink GTFS snapshot, including trips after midnight, and extract a corridor
+- [ ] **TRN-02**: User can build the trip compatibility DAG with deadhead and turnaround times, pruned by reachability from and to the depot
+- [ ] **TRN-03**: User can solve M0 as a matching LP and as a min-cost flow; the fleet sizes agree and duties are extracted without rounding an interior point
+- [ ] **TRN-04**: Where the feed has `block_id`, the M0 fleet is compared with the agency's block count for the same trips
+- [ ] **TRN-05**: User can build the time-space graph with the slot convention of Models §1 from a corridor and a declared Delta
+- [ ] **TRN-06**: User can solve M1, rows (1)-(8) assembled once, with HiGHS, and its LP relaxation with the textbook IPM
+- [ ] **TRN-07**: Every M1 schedule passes an independent replay: each trip once, time-connected paths, energy within bounds, plugs within capacity
+- [ ] **TRN-08**: Engineering parameters come from TOML scenario files in which every value has a unit and a source or the flag `illustrative`
+- [ ] **TRN-09**: User can compare M1 with M0 on the corridor: buses, deadhead, and cost
+- [ ] **TRN-10**: On tiny M1 instances the branch-and-bound of BNB-01 reaches the HiGHS optimum
+
+### Convex subproblems
+
+- [ ] **NLP-01**: User can solve M1-Q's fixed-integer QP by the textbook QP method, agreeing with an independent solve
+- [ ] **NLP-02**: User can solve M2's fixed-integer NLP by `trust-constr` with analytic gradients and Hessians that agree with finite differences
+- [ ] **NLP-03**: User can solve R3's fixed-route problem with the closed perspective, eliminating fixed-zero faces before the barrier solve
+- [ ] **NLP-04**: Each fixed-integer solve reports the bound (A5) and KKT residuals, and (A5) never exceeds the subproblem value
+
+### Outer approximation
+
+- [ ] **OA-01**: User can run OA (A6) with the master dual bound as L, only replayed solutions as U, restoration for suspected infeasible assignments, and status `stall` when no violated cut is found
+- [ ] **OA-02**: User can solve M2 by OA on the corridor and read the M2-P bracket around it
+- [ ] **OA-03**: User can solve R3 by OA on small E instances under a declared scenario, read the R3-P bracket, and learn whether any R1 optimum uses a segment with two or more stations
+- [ ] **OA-04**: User can compare M2 with M1 and R3 with R1 over a declared parameter grid
+
+### Extensions
+
+- [ ] **EXT-01**: User can solve M3 at fixed schedules from several feasible starts, with (14) checked against numerical integration, and read the aligned M1 optimistic bound; no M3 result is labeled global
+- [ ] **EXT-02**: User can solve M4 in expected-cost and worst-case form over an enumerated scenario set, with common decisions replayed in every scenario
+
+### Studies and reporting
+
+- [ ] **RPT-01**: `python run_bench.py` reproduces the experiment matrix of Validation §3 and writes result bundles carrying the revision
+- [ ] **RPT-02**: User can view static route maps, vehicle and charging timelines, power and state-of-charge traces, and gap-versus-time plots
+- [ ] **RPT-03**: Every number in the README is regenerated by a committed command, and `docs/VALIDATION.md` records each executed check with its revision
+
+## v2 Requirements
+
+### Models
+
+- **V2-01**: R4, nonlinear charging functions on the Montoya instances
+- **V2-02**: Time windows, multi-depot, heterogeneous fleets
+- **V2-03**: Multi-day transit with energy carried between days
+- **V2-04**: The 2022 set and the X instances, once the 2022 distance convention is established by replay
+
+### Methods
+
+- **V2-05**: Branch-and-price on R2
+- **V2-06**: Homogeneous self-dual and predictor-corrector variants of the textbook IPM
+- **V2-07**: Conic (SOCP) cross-check of M2 and R3 at fixed integers
+- **V2-08**: Ipopt cross-check, if it installs on Python 3.14/Windows without a second environment
+- **V2-09**: Rust/PyO3 kernel for R2 pricing, if profiling shows pricing dominates
+
+## Out of Scope
+
+| Feature | Reason |
+|---------|--------|
+| Driver rostering, labor agreements | Independent data and rules; vehicle schedules are not duties |
+| Power flow, vehicle-to-grid, solar | Each needs its own physical model and data |
+| Commercial solvers, modeling layers | No measurement shows a need |
+| Second Python environment | The user's single-environment rule |
+| Predictive ML, CVaR, distributionally robust models | No data or decision question justifies them yet (Models §7) |
+| Web application | Results are static files |
+
+## Traceability
+
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| FND-01 | Phase 1 | Pending |
+| FND-02 | Phase 1 | Pending |
+| FND-03 | Phase 1 | Pending |
+| FND-04 | Phase 1 | Pending |
+| DATA-01 | Phase 1 | Pending |
+| DATA-02 | Phase 1 | Pending |
+| DATA-03 | Phase 1 | Pending |
+| CHK-01 | Phase 1 | Pending |
+| CHK-02 | Phase 1 | Pending |
+| IPM-01 | Phase 2 | Pending |
+| IPM-02 | Phase 2 | Pending |
+| IPM-03 | Phase 2 | Pending |
+| IPM-04 | Phase 2 | Pending |
+| IPM-05 | Phase 2 | Pending |
+| IPM-06 | Phase 2 | Pending |
+| EVRP-01 | Phase 3 | Pending |
+| EVRP-02 | Phase 3 | Pending |
+| EVRP-03 | Phase 3 | Pending |
+| EVRP-04 | Phase 3 | Pending |
+| EVRP-05 | Phase 3 | Pending |
+| EVRP-06 | Phase 3 | Pending |
+| BNB-01 | Phase 4 | Pending |
+| BNB-02 | Phase 4 | Pending |
+| BNB-03 | Phase 4 | Pending |
+| CG-01 | Phase 5 | Pending |
+| CG-02 | Phase 5 | Pending |
+| CG-03 | Phase 5 | Pending |
+| CG-04 | Phase 5 | Pending |
+| CG-05 | Phase 5 | Pending |
+| TRN-01 | Phase 6 | Pending |
+| TRN-02 | Phase 6 | Pending |
+| TRN-03 | Phase 6 | Pending |
+| TRN-04 | Phase 6 | Pending |
+| TRN-05 | Phase 7 | Pending |
+| TRN-06 | Phase 7 | Pending |
+| TRN-07 | Phase 7 | Pending |
+| TRN-08 | Phase 7 | Pending |
+| TRN-09 | Phase 7 | Pending |
+| TRN-10 | Phase 7 | Pending |
+| NLP-01 | Phase 8 | Pending |
+| NLP-02 | Phase 8 | Pending |
+| NLP-03 | Phase 8 | Pending |
+| NLP-04 | Phase 8 | Pending |
+| OA-01 | Phase 9 | Pending |
+| OA-02 | Phase 9 | Pending |
+| OA-03 | Phase 9 | Pending |
+| OA-04 | Phase 9 | Pending |
+| EXT-01 | Phase 10 | Pending |
+| EXT-02 | Phase 10 | Pending |
+| RPT-01 | Phase 11 | Pending |
+| RPT-02 | Phase 11 | Pending |
+| RPT-03 | Phase 11 | Pending |
+
+**Coverage:**
+- v1 requirements: 52 total
+- Mapped to phases: 52
+- Unmapped: 0 ✓
+
+---
+*Requirements defined: 2026-09-28*
+*Last updated: 2026-09-28 after initial definition*
