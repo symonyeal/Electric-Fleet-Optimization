@@ -1,8 +1,8 @@
 ---
 phase: 01-foundations-and-evrp-data
 verified: 2026-09-29T07:10:00Z
-status: gaps_found
-score: 7/9 must-haves verified
+status: passed
+score: 9/9 must-haves verified
 covered_files:
   - ".github/workflows/ci.yml"
   - ".planning/REQUIREMENTS.md"
@@ -153,3 +153,20 @@ One gap, documentation only: `docs/TOOLCHAIN.md` does not name the HiGHS version
 
 _Verified: 2026-09-29T07:10:00Z_
 _Verifier: Claude (gsd-verifier)_
+
+
+## Gap Closure (2026-09-29, commit bb83948)
+
+Re-checked by the orchestrator after the fixes; the independent verifier's findings above are
+kept as written.
+
+| Gap | Fix | Evidence |
+|-----|-----|----------|
+| TOOLCHAIN.md lacks the HiGHS version | States HiGHS 1.12.0 (from `scipy.optimize._highspy._core.HIGHS_VERSION_*`) | `docs/TOOLCHAIN.md` line 4 |
+| Duals of a completed crossover-off solve not stated | Stated, and pinned: `test_highs_ipm_without_crossover_stops_inside_the_optimal_face` asserts `ineqlin.marginals is not None` | 86 passed locally |
+| GitHub Actions never ran (FND-04, criterion 1) | Pushed `main` | Run 36533808267, workflow `checks`, Python 3.14: completed, success |
+| SOURCES.md not UTF-8 | The single cp1252 byte replaced; every tracked file now decodes as UTF-8 | Checked over `git ls-files` |
+| FND-03 fields optional | `record()` requires `solver`, `elapsed`, `provenance` (keyword-only) | `test_record_requires_solver_time_and_provenance` |
+| Stub runner not in repo | TOOLCHAIN.md now says it arrives in Phase 3 (EVRP-05) | - |
+
+**Status after closure:** passed, 9/9.
