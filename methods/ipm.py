@@ -22,7 +22,8 @@ def standard(c, A_ub=None, b_ub=None, A_eq=None, b_eq=None, l=None, u=None):
     """min c'x s.t. A_ub x <= b_ub, A_eq x = b_eq, l <= x <= u  ->  (c, A, b, l, u), equality form.
 
     Slacks s = b_ub - A_ub x are appended with 0 <= s <= b_ub - min_{l<=x<=u} A_ub x, finite
-    whenever the box makes it so; (A3) needs finite bounds to be finite.
+    whenever the box makes it so; (A3) needs finite bounds to be finite. A negative bound means
+    the row cannot hold on the box, and ipm() returns `infeasible`.
     """
     c = np.asarray(c, float)
     n = len(c)
@@ -33,8 +34,10 @@ def standard(c, A_ub=None, b_ub=None, A_eq=None, b_eq=None, l=None, u=None):
     bi = np.zeros(0) if b_ub is None else np.asarray(b_ub, float)
     be = np.zeros(0) if b_eq is None else np.asarray(b_eq, float)
     Ai.eliminate_zeros()
-    lo = Ai.maximum(0) @ l + Ai.minimum(0) @ np.where(np.isinf(u), 1e300, u)
-    smax = np.where(lo < -1e299, np.inf, bi - lo)
+    inf = np.isinf(u)
+    lo = Ai.maximum(0) @ l + Ai[:, ~inf].minimum(0) @ u[~inf]          # min of each row on the box
+    unb = np.asarray((Ai[:, inf] < 0).sum(axis=1)).ravel() > 0         # ... -inf through u = inf
+    smax = np.where(unb, np.inf, bi - lo)
     mi = len(bi)
     A = sp.block_array([[Ae, None], [Ai, sp.eye_array(mi)]], format="csr")
     if mi == 0:
@@ -78,6 +81,11 @@ def ipm(c, A, b, l, u, Q=None, eps=1e-8, delta=None, sigma=0.1, eta=0.9995, kmax
     A = sp.csr_array(A, dtype=float)
     m, N = A.shape
     c, b, l, u = (np.asarray(v, float) for v in (c, b, l, u))
+    if not np.all(np.isfinite(l)):
+        raise ValueError("ipm needs finite lower bounds")
+    if (cut := np.flatnonzero(l > u)).size:            # empty box: a proof of infeasibility
+        return dict(x=None, y=None, a=None, f=None, L=None, status="infeasible", k=0, err=None,
+                    stats=dict(m=m, n=N), trace=[], reason=f"l > u in columns {cut.tolist()}")
     Q = sp.csr_array((N, N)) if Q is None else sp.csr_array(Q, dtype=float)
     qp = Q.nnz > 0
     J = np.flatnonzero(u - l > 0)                       # free after eliminating fixed x_j
@@ -85,9 +93,9 @@ def ipm(c, A, b, l, u, Q=None, eps=1e-8, delta=None, sigma=0.1, eta=0.9995, kmax
     b1, c1, U = b - A @ l, (c + Q @ l)[J], (u - l)[J]
     f0 = c @ l + l @ (Q @ l) / 2
     n, B = len(J), np.isfinite(U)
-    x = np.where(B, np.minimum(1.0, U / 2), 1.0)
+    x = np.where(B, U / 2, 1.0)                        # centered start: every x_j z_j = w_j v_j = 1
     w = np.where(B, U - x, 1.0)
-    z, v, y = np.ones(n), B.astype(float), np.zeros(m)
+    z, v, y = 1 / x, np.where(B, 1 / w, 0.0), np.zeros(m)
     nb = max(n + B.sum(), 1)
     st = dict(m=m, n=N, n_free=n, reg=(dp, dd), t_factor=0.0, t_solve=0.0)
     tr, status = [], "limit"
@@ -102,11 +110,11 @@ def ipm(c, A, b, l, u, Q=None, eps=1e-8, delta=None, sigma=0.1, eta=0.9995, kmax
         rd = c1 - A1.T @ y - z + v + Q1 @ x
         g = x @ z + w[B] @ v[B]
         pobj = f0 + c1 @ x + x @ (Q1 @ x) / 2
-        dobj = f0 + b1 @ y - U[B] @ v[B] - x @ (Q1 @ x) / 2
-        err = (max(np.abs(rp).max(initial=0), np.abs(ru).max(initial=0))
-               / (1 + max(np.abs(b1).max(initial=0), np.abs(U[B]).max(initial=0))),
-               np.abs(rd).max(initial=0) / (1 + np.abs(c1).max(initial=0)),
-               g / (1 + abs(pobj) + abs(dobj)))
+        err = (max(np.abs(rp).max(initial=0) / (1 + np.abs(b1).max(initial=0)),    # (A2), with
+                   (np.abs(ru[B]) / (1 + U[B])).max(initial=0)),                # each bound row
+               np.abs(rd).max(initial=0) * max(1 / (1 + np.abs(c1).max(initial=0)),  # own bound;
+                                               np.abs(x).sum() / (1 + abs(pobj))),    # |x'rd| too
+               g / (1 + abs(pobj)))
         if trace:
             tr.append(dict(k=k, f=pobj, L=bound(c, Q, A, b, l, u, xs(x), y), err=err))
         if err[0] <= eps and err[1] <= eps and err[2] <= eps:

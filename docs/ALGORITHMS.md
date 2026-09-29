@@ -70,15 +70,29 @@ alpha_s similarly. An experimental predictor-corrector variant can reuse the
 factorization, but must be documented separately from the basic path-following
 algorithm and validated before entering the branch-and-bound experiment.
 
-The stopping rule requires normalized primal and dual residuals and complementarity:
+With finite upper bounds, x + w = u, w >= 0 and multiplier v >= 0 join the
+system, with residual r_u = u - x - w. The stopping rule requires normalized
+primal and dual residuals and complementarity:
 
 $$
 \frac{\|r_p\|_\infty}{1+\|b\|_\infty}\le\epsilon,
 \quad
-\frac{\|r_d\|_\infty}{1+\|c\|_\infty}\le\epsilon,
+\max_j\frac{|r_{u,j}|}{1+u_j}\le\epsilon,
 \quad
-\frac{x^Ts}{1+|c^Tx|+|b^Ty|}\le\epsilon. \tag{A2}
+\|r_d\|_\infty\max\Big\{\frac{1}{1+\|c\|_\infty},\frac{\|x\|_1}{1+|c^Tx|}\Big\}\le\epsilon,
+\quad
+\frac{x^Tz+w^Tv}{1+|c^Tx|}\le\epsilon. \tag{A2}
 $$
+
+Each bound row is scaled by its own bound, and the gap by the primal objective
+alone. The second dual term bounds |x'r_d|, the objective error a dual residual
+causes. Without these, one large finite bound makes the rule vacuous. With a box
+of width 1e8, a first version scaled all residuals by the largest bound. It
+reported `optimal` on infeasible LPs, and on a feasible LP at a point 2e-4 above
+the optimum; the Phase 2 verification found both. The start is centered:
+x = u/2 on finite boxes, 1 otherwise, z = 1/x, v = 1/w. An empty box (l > u,
+including a row whose minimum over the box exceeds its right-hand side) is
+returned as `infeasible` with the columns that prove it.
 
 Also check nonnegativity in original units. Neither a small step nor a small
 barrier parameter alone proves optimality. Slightly infeasible iterates require
