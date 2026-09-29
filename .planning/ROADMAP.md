@@ -33,6 +33,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 9: Outer approximation** - OA for M2 and R3 with M2-P and R3-P brackets (completed 2026-09-29)
 - [x] **Phase 10: Nonconvex and scenario extensions** - M3 local solutions, M4 scenario fleet (completed 2026-09-29)
 - [ ] **Phase 11: Studies and publication** - Experiment matrix, figures, regenerated README, executed validation record
+- [ ] **Phase 12: Route 100 on sourced parameters** - BC Hydro fleet tariff as published, sourced vehicle values, comparison with TransLink's deployment
 
 ## Phase Details
 
@@ -257,6 +258,24 @@ Plans:
 - [ ] 11-01: Experiment matrix runner and result bundles
 - [ ] 11-02: Figures, README results, validation record
 
+### Phase 12: Route 100 on sourced parameters
+
+**Goal**: A user can price Route 100 with the utility tariff TransLink would pay and vehicle values traced to sources, and compare the model's fleet and chargers with TransLink's deployment
+**Depends on**: Phase 7, Phase 11
+**Requirements**: DATA-04, TRN-11, TRN-12
+**Design refs**: docs/DATA.md §3; docs/MODELS.md §3a; plan `Claude Func Folder/plans/20260929-efm-route100-real-data.md`
+**Success Criteria** (what must be TRUE):
+
+  1. Every value of the sourced scenario files cites a source recorded in docs/SOURCES.md, or is `illustrative`
+  2. A windowed demand charge, riders and a basic charge are priced by M1's rows, the replay and the enumeration, which agree on tiny timetables; without tariff keys the rows are unchanged
+  3. The full day is solved under both BC Hydro rates and both pack sizes, with fleet, plugs, on-route energy, billed demand and electricity cost reported against TransLink's 19 buses
+
+**Plans**: 1 plan
+
+Plans:
+
+- [ ] 12-01: Source register, scenario files, tariff terms, full-day runs and write-up
+
 ## Progress
 
 **Execution Order:**
@@ -275,3 +294,4 @@ Phases execute in numeric order. Phases 2, 3, and 6 depend only on Phase 1, so a
 | 9. Outer approximation | 3/3 | Complete | 2026-09-29 |
 | 10. Nonconvex and scenario extensions | 2/2 | Complete    | 2026-09-29 |
 | 11. Studies and publication | 0/2 | In progress (runner done; 19 of 34 cases bundled) | - |
+| 12. Route 100 on sourced parameters | 0/1 | In progress (DATA-04, TRN-11 done; TRN-12's four runs open) | - |

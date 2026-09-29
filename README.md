@@ -82,8 +82,10 @@ mathematics follows Vanderbei, *Linear Programming* (4th ed., 2014), and Beck,
 ### Where it stops
 
 Small instances. One depot, homogeneous vehicles, no time windows, no driver duties,
-no distribution-network power flow. Benchmark distances are unitless, and engineering
-parameters are declared scenarios, not agency data. It does not reproduce TransLink
+no distribution-network power flow. Benchmark distances are unitless. The Route 100
+scenarios price energy with BC Hydro's published fleet tariff and take the pack,
+consumption, charging efficiency and charger count from published sources; charger power,
+the depot and the capital costs remain declared, not agency data ([Data](docs/DATA.md) §3). It does not reproduce TransLink
 dispatch, authorize infrastructure, or match the speed of VROOM, PyVRP, or HiGHS.
 
 ## Run
@@ -95,6 +97,7 @@ benchmark from evrp-python at a pinned commit and checks its SHA-256.
 python -m pytest -q -m "not slow"                  # the checks of Validation §2
 python run_case.py evrp E-n22-k4 R1 --time 600     # R0 | R1 | R1-TR | R2-ipm | R2-simplex
 python run_case.py transit route100 M1 --until 8   # M0 | M1; --until H cuts the day at H:00
+python run_case.py transit route100 M1 --scenario rs1640   # sourced parameters (Data §3)
 python run_bench.py                                # tables, figures and the block above
 python run_bench.py --grid                         # first recompute the charging-physics grid
 python run_baseline.py E-n22-k4 --repo PATH        # evrp-python's GSGA, replayed

@@ -39,6 +39,7 @@ gap claim only under the contract of [Algorithms](ALGORITHMS.md) §8.
 | GTFS | Times past midnight; calendar then exceptions; Route 100 on 2026-10-07: 219 trips, 23 blocks; holiday runs Sunday service; fixture equals the snapshot | test_gtfs.py | Pass |
 | M0 | Matching LP, min-cost flow and Hopcroft-Karp agree; Dilworth on 10 timetables; IPM midpoint not rounded; Route 100 fleet 16 <= 23 blocks | test_network.py | Pass |
 | Scenarios | Values need unit and source | test_scenario.py | Pass |
+| Tariff | Without tariff keys M1's rows and costs are unchanged; with BC Hydro RS 1640 riders, basic charge and a demand window from 06:00 or 07:30, M1, the enumeration and the replay agree on 6 tiny timetables; the 07:30 window moves charging and lowers the optimum; rider and basic charge by hand; a window without charging bills no demand | test_fleet.py | Pass |
 | M1 | Equals path-cover enumeration on 6 tiny timetables; replay finds a removed charge; replay traces start at s0 B, stay above the reserve and sum to the charged energy; tree certifies tiny M1 with priority; Route 100 morning bound and replay; IPM relaxation equals highs-ds | test_fleet.py | Pass |
 | M1-Q, M2 subproblems | QP method equals trust-constr; two barrier methods agree to 1e-6; (A5) below the value; derivatives match finite differences | test_charge.py | Pass |
 | OA, M2 | Known convex MINLP certified; M2 inside M2-P; z(M2) >= z(M1); bounds nondecreasing | test_oa.py | Pass |
@@ -63,6 +64,7 @@ without branching priority.
 | IPM nodes in branch-and-bound | Tiny R1 and M1 | Nodes, bound quality at inexact nodes, time against HiGHS |
 | Price of the battery, transit | One TransLink corridor | M1 against M0: buses, deadhead, cost |
 | Price of charging physics | Corridor; 2019 E set | M2 against M1; R3 against R1 over a parameter grid |
+| Route 100 on sourced parameters | Route 100, full day | M1 under BC Hydro RS 1640 and RS 1650 with two pack sizes: fleet, plugs, on-route energy, billed demand, electricity cost, against TransLink's 19 buses |
 | Scale | Corridor subsets of increasing size | Where each method stops returning a certificate |
 
 **4. Scale limits measured so far**
@@ -104,6 +106,14 @@ From the bundles in `docs/results` ([Results](results/README.md)):
   alpha = 5e-4 routes the same subproblem converges in 0.4 s at alpha = 0.99e-3 (293.791) and
   1.01e-3 (293.838) and fails only at 1e-3. The grid point is kept as a measured limit of the
   textbook barrier, not moved.
+- Route 100 on sourced parameters ([Data](DATA.md) §3) is not yet measured: the four
+  full-day runs (`python run_case.py transit route100 M1 --scenario rs1640-range --time 1800`,
+  likewise `rs1650-range`, and `rs1640`, `rs1650` at 600 s) were stopped at the user's request
+  4.5 minutes in, and wrote no bundle. One probe, not a bundle and run before the tariff terms
+  existed, set the 594 kWh pack, 1.429 kWh/km, eta 0.90 and 5 plugs per loop in the
+  illustrative scenario: in 300 s M1 found a replayed full-day schedule on 16 buses with no
+  on-route charging (U = 7,539.60, L = 7,052.19), though 6 of M0's 16 battery-free duties fall
+  below the reserve with that pack. That is why the `-range` files exist.
 - Not yet measured: R1 and R2 on E-n33-k4; R0, R1 and R2 on E-n51-k5 to E-n101-k8
   (15 cases; `python run_bench.py --run --missing`).
 
