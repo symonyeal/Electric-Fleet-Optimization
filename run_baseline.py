@@ -21,7 +21,7 @@ from pathlib import Path
 
 import numpy as np
 
-from checks.certificate import provenance, revision
+from checks.certificate import REVISION, provenance
 from checks.route import from_evrp_python, replay
 from data.evrp import COMMIT, FETCHED, load
 from run_case import key, save
@@ -81,7 +81,7 @@ def main():
                  fitness=float(sol.get_tour_length()), U=rp["length"] if rp["ok"] else None,
                  replay=dict(ok=rp["ok"], defects=rp["defects"], routes=rp["routes"]),
                  routes=routes, elapsed=dt, provenance=dict(provenance(p), evrp_python=COMMIT,
-                                                            revision=revision()))
+                                                            revision=REVISION))
         save(r, Path(x.out) / f"{p['name']}-GSGA-seed{s}")
         print(f"{p['name']} GSGA seed {s}: fitness {r['fitness']:.6f}  replay "
               f"{'ok' if rp['ok'] else rp['defects']}  length {rp['length']:.6f}  {dt:.1f}s")

@@ -46,12 +46,17 @@ def record(model, instance, status, U=None, L=None, *, solver, elapsed, provenan
 
 @functools.cache
 def revision():
-    """Short git revision, with '+dirty' when the working tree differs from it."""
+    """Short git revision, with '+dirty' when the code differs from it (result bundles and
+    planning notes are not code)."""
     git = lambda *a: subprocess.run(["git", *a], capture_output=True, text=True,
                                     check=False).stdout.strip()
-    return git("rev-parse", "--short", "HEAD") + ("+dirty" if git("status", "--porcelain") else "")
+    code = git("status", "--porcelain", "--", ".", ":!docs/results", ":!.planning")
+    return git("rev-parse", "--short", "HEAD") + ("+dirty" if code else "")
+
+
+REVISION = revision()                     # the code this process runs, fixed at import
 
 
 def provenance(p, **params):
-    return dict(revision=revision(), instance=p["name"], key=p.get("key"), sha256=p.get("sha256"),
+    return dict(revision=REVISION, instance=p["name"], key=p.get("key"), sha256=p.get("sha256"),
                 params=params)
