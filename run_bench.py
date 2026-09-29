@@ -31,24 +31,33 @@ CASES = [*[("evrp", n, m, t, ()) for n in E for m, t in (("R0", 600), ("R1", 600
                                                          ("R2-ipm", 1800), ("R2-simplex", 1800))],
          *[("transit", "route100", m, t, u) for u, t in ((("--until", "8"), 600),
                                                          (("--until", "10"), 900), ((), 1800))
-           for m in ("M0", "M1")]]
+           for m in ("M0", "M1")],
+         *[("transit", "route100", "M1", t, ("--scenario", s)) for s, t in (
+             ("rs1640-range", 1800), ("rs1650-range", 1800), ("rs1640", 600), ("rs1650", 600))]]
 BLUE, ORANGE, AQUA, YELLOW = "#2a78d6", "#eb6834", "#1baf7a", "#eda100"   # validated, dataviz
 INK, INK2, GRID = "#0b0b0b", "#52514e", "#e4e3df"
 
 
 TRANSIT = {"route100": "Route 100, full day", "route100-until10h": "Route 100 to 10:00",
            "route100-until8h": "Route 100 to 08:00"}
+SOURCED = {"route100-rs1640": "594 kWh pack, BC Hydro RS 1640 (Overnight Rate) at every meter",
+           "route100-rs1650": "594 kWh pack, RS 1650 (Demand Transition) on route, RS 1640 at "
+                              "the depot",
+           "route100-rs1640-range": "285.8 kWh pack (TransLink's 150 km), RS 1640 at every meter",
+           "route100-rs1650-range": "285.8 kWh pack (TransLink's 150 km), RS 1650 on route, "
+                                    "RS 1640 at the depot"}
 
 
 def transit(tag):
-    """The M1 bundle of a Route 100 window, its corridor and its scenario."""
+    """The M1 bundle of a Route 100 run, its corridor and its scenario; tag is
+    route100[-scenario][-untilHh], the scenario file data/scenarios/route100[-scenario].toml."""
     from data.scenario import load
     with open("tests/fixtures/route100.json", encoding="utf-8") as f:
         c = json.load(f)
-    if tag != "route100":
-        h = int(tag.removeprefix("route100-until").removesuffix("h"))
-        c = dict(c, trips=[t for t in c["trips"] if t["dep"] < h * 3600])
-    return bundle(OUT / "transit" / f"{tag}-M1.json"), c, load("data/scenarios/route100.toml")[0]
+    sc, _, h = tag.partition("-until")
+    if h:
+        c = dict(c, trips=[t for t in c["trips"] if t["dep"] < int(h.removesuffix("h")) * 3600])
+    return bundle(OUT / "transit" / f"{tag}-M1.json"), c, load(f"data/scenarios/{sc}.toml")[0]
 
 
 def bundle(path):
@@ -192,6 +201,36 @@ def write_readme():
         else:
             row += " - | - | - | - | - | - |"
         lines.append(row)
+    S = [(t, *transit(t)) for t in SOURCED if bundle(OUT / "transit" / f"{t}-M1.json")]
+    a = bundle(OUT / "transit" / "route100-M0.json")
+    if S and a:
+        lines += ["", "## Route 100 on sourced parameters (Data §3)", "",
+                  ("Full service day, 2026-10-07. Battery 594 kWh (Nova LFSe+) or 285.8 kWh, the "
+                   "smallest pack consistent with TransLink's 'over 150 km' per charge; 1.429 "
+                   "kWh/km (Altoona 40-ft arterial cycle), charging efficiency 0.90 (Foothill), "
+                   "up to 5 plugs per loop (TransLink's 10 on-route chargers, split by inference), "
+                   "and BC Hydro's fleet tariff as published: riders included, taxes excluded, "
+                   "the monthly demand charge spread over 365/12 days. Charger power, the depot, "
+                   "the operating band and the capital and operating costs stay illustrative. "
+                   "TransLink runs Route 100 with 19 battery-electric buses and overhead chargers "
+                   "at both loops. M0's battery-free duties are replayed with this battery and no "
+                   "charging; M1 values are replayed schedules."), "",
+                  ("| Scenario | M0 duties below reserve | M1 fleet | Plugs | Charged on route, "
+                   "kWh | Billed demand, kW | Electricity, CAD/day | Cost U | L | Gap | Status |"),
+                  "|---|---:|---:|---|---:|---:|---:|---:|---:|---:|---|"]
+        for tag, b, c, v in S:
+            r0 = replay_energy(c, v, a["duties"], {}, {})
+            rB = v["battery"]["reserve"] * v["battery"]["B"]
+            E = sum(min(e for _, e in tr) < rB - 1e-6 for tr in r0["trace"])
+            co, P = v["cost"], b["replay"]["parts"]
+            kwh = sum(sum(d.values()) for d in b["plan"].values()) * v["time"]["delta"] / 3600
+            kw = P["peak"] / ((1 + co.get("rider", 0.0)) * co["peak"])
+            el = sum(P.get(k, 0.0) for k in ("energy", "depot_energy", "peak", "basic"))
+            plugs = ", ".join(f"{v['sites'][s]['name']} {i['n']}" for s, i in b["infra"].items())
+            gap = "-" if b["gap_rel"] is None else f"{100 * b['gap_rel']:.3f}%"
+            lines.append(f"| {SOURCED[tag]} | {E} of {a['fleet']} | {b['fleet']} | "
+                         f"{plugs or 'none'} | {kwh:,.0f} | {kw:,.0f} | {fmt(el)} | {fmt(b['U'])} "
+                         f"| {fmt(b['L'])} | {gap} | {b['status']} |")
     G = bundle(OUT / "grid" / "grid.json")
     if G:
         lines += ["", "## Charging physics (OA-04)", "",
@@ -216,10 +255,9 @@ def write_readme():
                          f"{fmt(g.get('elapsed'), 1)} |")
     lines += ["", "## Figures", "", "![E-n22-k4](fig/routes-E-n22-k4.png)", "",
               "![R2 duals](fig/r2-duals-E-n22-k4.png)", ""]
-    tag = next((t for t in TRANSIT if bundle(OUT / "transit" / f"{t}-M1.json")), None)
-    if tag:
-        lines += [f"![{TRANSIT[tag]} timeline](fig/timeline-{tag}.png)", "",
-                  f"![{TRANSIT[tag]} energy](fig/energy-{tag}.png)", ""]
+    for tag in drawn():
+        lines += [f"![{name(tag)} timeline](fig/timeline-{tag}.png)", "",
+                  f"![{name(tag)} energy](fig/energy-{tag}.png)", ""]
     (OUT / "README.md").write_text("\n".join(lines), encoding="utf-8")
 
 
@@ -259,6 +297,15 @@ def summary():
                       f"{sum(i['n'] for i in b['infra'].values())} plugs at "
                       f"{len(b['infra'])} sites, cost {fmt(b['U'])} against the bound "
                       f"{fmt(b['L'])} (gap {gap}, {b['status']}).")
+    for tag, what in SOURCED.items():
+        b = bundle(OUT / "transit" / f"{tag}-M1.json")
+        if b:
+            gap = "-" if b["gap_rel"] is None else f"{100 * b['gap_rel']:.2f}%"
+            L += ["", (f"On sourced parameters ({what}; [Data](docs/DATA.md) §3), M1 "
+                       f"schedules the day with {b['fleet']} buses and "
+                       f"{sum(i['n'] for i in b['infra'].values())} plugs, cost "
+                       f"{fmt(b['U'])} CAD/day against the bound {fmt(b['L'])} (gap {gap}, "
+                       f"{b['status']}); TransLink runs 19 battery-electric buses.")]
     return L
 
 
@@ -325,9 +372,24 @@ def figures():
     fig.tight_layout()
     fig.savefig(OUT / "fig" / "r2-duals-E-n22-k4.png", dpi=150)
     plt.close(fig)
-    tag = next((t for t in TRANSIT if bundle(OUT / "transit" / f"{t}-M1.json")), None)
-    if tag is None:
-        return
+    for tag in drawn():
+        draw(tag, plt, Patch, replay_energy)
+
+
+def drawn():
+    """The Route 100 runs drawn: the first illustrative window with an M1 bundle, then each
+    sourced run whose schedule charges on route."""
+    first = next((t for t in TRANSIT if bundle(OUT / "transit" / f"{t}-M1.json")), None)
+    return [t for t in (first, *SOURCED) if t and (b := bundle(OUT / "transit" / f"{t}-M1.json"))
+            and (t in TRANSIT or b["plan"])]
+
+
+def name(tag):
+    return TRANSIT.get(tag) or f"Route 100, full day, {SOURCED[tag]}"
+
+
+def draw(tag, plt, Patch, replay_energy):
+    """Timeline, and replayed energy with site power, of one Route 100 M1 bundle."""
     b, c, v = transit(tag)
     T = {t["id"]: t for t in c["trips"]}
     dl, n = v["time"]["delta"], len(b["duties"])
@@ -346,7 +408,8 @@ def figures():
     ax.set_xlabel("hour of the service day")
     ax.legend([Patch(color=BLUE), Patch(color=ORANGE)], ["trip", "charging slot"], ncol=2,
               frameon=False, fontsize=8, loc="lower right", bbox_to_anchor=(1, 1))
-    ax.set_title(f"{TRANSIT[tag]}, M1: buses, trips and charging (illustrative scenario)",
+    ax.set_title(f"{name(tag)}, M1: buses, trips and charging ("
+                 + ("illustrative scenario)" if tag in TRANSIT else "sourced parameters)"),
                  color=INK, loc="left")
     fig.tight_layout()
     fig.savefig(OUT / "fig" / f"timeline-{tag}.png", dpi=150)
@@ -369,7 +432,7 @@ def figures():
             fontsize=8)
     a1.set_ylabel("battery energy, kWh")
     who = f"bus {top + 1}, which charges most, in blue" if kwh[top] else "gray"
-    a1.set_title(f"{TRANSIT[tag]}, M1 replayed: energy per bus ({who})"
+    a1.set_title(f"{name(tag)}, M1 replayed: energy per bus ({who})"
                  + ("" if rp["load"] else "; no bus charges in this window"),
                  color=INK, loc="left")
     if not rp["load"]:
@@ -396,7 +459,12 @@ def figures():
 def out(case):
     """The bundle run_case.py writes for a case of CASES."""
     track, n, m, _, u = case
-    return OUT / track / (f"{n}-until{float(u[1]):g}h-{m}.json" if u else f"{n}-{m}.json")
+    a = dict(zip(u[::2], u[1::2], strict=True))
+    if "--scenario" in a:
+        n = f"{n}-{a['--scenario']}"
+    if "--until" in a:
+        n = f"{n}-until{float(a['--until']):g}h"
+    return OUT / track / f"{n}-{m}.json"
 
 
 def run(missing=False, jobs=1):

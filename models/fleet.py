@@ -5,14 +5,17 @@ x_0j a pull-out from the depot, x_i0 a pull-in. Energy (kWh): a_j on arrival at 
 y_j on departing it, E_j = kappa km_j the trip, e_ij the deadhead. A bus may charge at j's first
 stop, when it is a charging site s(j), in the window of slots t before dep_j, with power p_jt
 (battery side, kW) on a plug u_jt; the slot must lie wholly after the predecessor's arrival.
-    min  F sum x_0j + c_dh (deadhead km) + sum_s (f o_s + a n_s + b h_s + pi D_s)
-         + c_e (Delta/eta) sum p_jt + (c_dep/eta) sum_i (s0 B x_0i - z_i)
+    min  F sum x_0j + c_dh (deadhead km) + sum_s ((f + rho c_b) o_s + a n_s + b h_s + rho pi D_s)
+         + rho c_e (Delta/eta) sum p_jt + rho (c_dep/eta) sum_i (s0 B x_0i - z_i)
+with rho = 1 + rider and c_b the utility's basic charge per metered site (tariff(); 1 and 0
+when the scenario declares no tariff).
     sum_i x_ij + x_0j = 1,  sum_j x_ij + x_i0 = 1                            (2), (3)
     a_j = y_i - E_i - e_ij  if x_ij = 1;   a_j = s0 B - e_0j  if x_0j = 1     (7), two-sided big-M
     y_j = a_j + Delta sum_t p_jt,   rB <= a_j,   rB + E_j <= y_j <= smax B    (7), (8)
     p_jt <= P u_jt,   u_jt <= x_0j + sum_{i present at t} x_ij                (4)
     sum_j u_jt <= n_s <= nbar o_s,   h_s <= hbar o_s                          (5)
     L_s + sum_j p_jt / eta <= G0_s + h_s,   D_s >= L_s + sum_j p_jt / eta      (6)
+      (D_s over the slots of the billing-demand window only, Data §3)
     y_i - E_i - e_i0 >= rB  if x_i0 = 1;   z_i <= y_i - E_i - e_i0, z_i <= smax B x_i0.
 The whole trip's energy is taken at its start, which enforces the reserve conservatively
 (Models §1). The per-bus time-space form of the design has the same schedules but a symmetric
@@ -28,6 +31,14 @@ from checks.certificate import provenance, record
 from checks.schedule import replay_energy
 from models.network import compat, great_circle_km
 from models.route import Rows, solve, status
+
+
+def tariff(co):
+    """Electricity tariff terms of a scenario's cost table (Data §3): the multiplier 1 + rider on
+    every electricity charge (energy, demand, basic), and the billing-demand window in seconds of
+    the day. Absent keys give 1 and the whole day."""
+    return (1 + co.get("rider", 0.0), 3600 * co.get("peak_from", 0.0),
+            3600 * co.get("peak_to", 24.0))
 
 
 def instance(c, v):
@@ -99,21 +110,22 @@ def rows(c, v, fixed=None, loss=False):
             lb[sn + k] = ub[sn + k] = fixed[s]["n"]
             lb[sh + k] = ub[sh + k] = fixed[s]["h"]
     co = v["cost"]
-    cost[x0:x0 + n] = co["F"] + co["deadhead"] * m["km0"] + co["depot_energy"] * s0B / eta
+    ex, w0, w1 = tariff(co)
+    cost[x0:x0 + n] = co["F"] + co["deadhead"] * m["km0"] + ex * co["depot_energy"] * s0B / eta
     cost[x1:x1 + n] = co["deadhead"] * m["km1"]
     cost[xc:xc + len(P)] = co["deadhead"] * np.array(m["km_ij"])
-    cost[z:z + n] = -co["depot_energy"] / eta
-    cost[p:p + len(K)] = co["energy"] * h / eta
+    cost[z:z + n] = -ex * co["depot_energy"] / eta
+    cost[p:p + len(K)] = ex * co["energy"] * h / eta
     alpha = v["charger"].get("alpha", 0.0)
     gbar = Pm / eta + alpha * Pm ** 2
     if loss:
         cost[p:p + len(K)] = 0.0
-        cost[g:g + len(K)] = co["energy"] * h
+        cost[g:g + len(K)] = ex * co["energy"] * h
         ub[g:g + len(K)] = gbar
-    cost[so:so + len(sites)] = co["site"]
+    cost[so:so + len(sites)] = co["site"] + ex * co.get("basic", 0.0)
     cost[sn:sn + len(sites)] = co["plug"]
     cost[sh:sh + len(sites)] = co["upgrade"]
-    cost[sd:sd + len(sites)] = co["peak"]
+    cost[sd:sd + len(sites)] = ex * co["peak"]
     R = Rows()
     into = [[] for _ in range(n)]
     outof = [[] for _ in range(n)]
@@ -159,7 +171,8 @@ def rows(c, v, fixed=None, loss=False):
         R.add([*[u + k for k in ks], sn + q], [1.0] * len(ks) + [-1.0], hi=0)
         gk, w = ([g + k for k in ks], 1.0) if loss else ([p + k for k in ks], 1 / eta)
         R.add([*gk, sh + q], [w] * len(ks) + [-1.0], hi=d["G0"] - d["L"])
-        R.add([*gk, sd + q], [w] * len(ks) + [-1.0], hi=-d["L"])
+        if w0 <= t * dt % 86400 < w1:                                   # billing window
+            R.add([*gk, sd + q], [w] * len(ks) + [-1.0], hi=-d["L"])
     for q, s in enumerate(sites):
         R.add([sn + q, so + q], [1.0, -v["sites"][s]["nbar"]], hi=0)
         R.add([sh + q, so + q], [1.0, -v["sites"][s]["hbar"]], hi=0)

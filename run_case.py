@@ -1,11 +1,12 @@
 """One instance, one model, one result bundle.
 
     python run_case.py evrp E-n22-k4 R1 [--time 600]
-    python run_case.py transit route100 M1 [--until 8] [--time 600]
+    python run_case.py transit route100 M1 [--until 8] [--time 600] [--scenario rs1640]
 
 Writes docs/results/<track>/<instance>-<model>.json (the result record), and for routing the
 routes in exchange format, and prints status, U, L and the gap. The transit corridor is the
-committed fixture tests/fixtures/<instance>.json with data/scenarios/<instance>.toml.
+committed fixture tests/fixtures/<instance>.json with data/scenarios/<instance>.toml, or with
+data/scenarios/<instance>-<scenario>.toml under --scenario (bundle <instance>-<scenario>-...).
 """
 
 import argparse
@@ -54,11 +55,11 @@ def save(r, out):
 def transit(x):
     with open(f"tests/fixtures/{x.instance}.json", encoding="utf-8") as f:
         c = json.load(f)
-    v, prov = scenario(f"data/scenarios/{x.instance}.toml")
-    name = x.instance
+    name = f"{x.instance}-{x.scenario}" if x.scenario else x.instance
+    v, prov = scenario(f"data/scenarios/{name}.toml")
     if x.until:
         c = dict(c, trips=[t for t in c["trips"] if t["dep"] < 3600 * x.until])
-        name = f"{x.instance}-until{x.until:g}h"
+        name = f"{name}-until{x.until:g}h"
     sc = dict(speed=v["deadhead"]["speed"], detour=v["deadhead"]["detour"],
               layover=v["time"]["layover"])
     if x.model == "M0":
@@ -80,6 +81,8 @@ def main():
     a.add_argument("model", choices=[*MODELS, "M0", "M1"])
     a.add_argument("--time", type=float, default=600.0, help="solver time limit, seconds")
     a.add_argument("--until", type=float, default=None, help="transit: trips departing before")
+    a.add_argument("--scenario", default=None,
+                   help="transit: data/scenarios/<instance>-<this>.toml")
     a.add_argument("--out", default=None)
     x = a.parse_args()
     if x.track == "transit":

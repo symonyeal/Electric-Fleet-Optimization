@@ -18,3 +18,16 @@ def test_case_bundles_are_named_as_run_case_writes_them():
     assert out(k["E-n22-k4", "R2-ipm", ()]).exists()
     assert out(k["route100", "M1", ("--until", "8")]).exists()
     assert out(k["route100", "M0", ()]).exists()
+
+
+def test_sourced_runs_are_named_by_scenario():
+    """A --scenario run writes <instance>-<scenario>-<model>, the name transit() reads back."""
+    from run_bench import CASES, out, transit
+    k = [c for c in CASES if "--scenario" in c[4]]
+    assert [out(c).name for c in k] == ["route100-rs1640-range-M1.json",
+                                         "route100-rs1650-range-M1.json",
+                                         "route100-rs1640-M1.json", "route100-rs1650-M1.json"]
+    _, c, v = transit("route100-rs1640")
+    assert v["cost"]["peak_from"] == 6.0 and len(c["trips"]) == 219
+    _, c, v = transit("route100-until8h")
+    assert "peak_from" not in v["cost"] and len(c["trips"]) == 54

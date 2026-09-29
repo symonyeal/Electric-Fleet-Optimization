@@ -212,6 +212,15 @@ windows, presence, plugs and grid, and recomputes the cost from the schedule alo
 `checks/enum_transit.py` solves tiny one-site timetables by enumerating every partition
 of the trips into chains, with a charging MILP written separately for each partition.
 
+A utility tariff ([Data](DATA.md) §3) changes three terms. The peak row of (6) is written only
+for slots whose start lies in the billing-demand window [`peak_from`, `peak_to`) of the day,
+so D_s is the peak inside the window: BC Hydro's Overnight Rate bills demand between 06:00
+and 22:00 only. The factor 1 + `rider` multiplies the energy, depot-energy, demand and basic
+prices, and the basic charge is paid per open site. Absent keys give the whole day, 1 and 0,
+and the rows of before. The replay and the enumeration price the tariff separately; they
+agree with M1 on the tiny timetables for windows from 06:00 and from 07:30, the second of
+which moves charging and lowers the optimum.
+
 **4. M1-Q and M2: convex nonlinear charging**
 
 For M1-Q, add
