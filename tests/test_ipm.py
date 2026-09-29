@@ -81,10 +81,11 @@ def test_interior_of_the_optimal_face():
 
 
 def test_statistics():
-    r = ipm(*standard(*rand_lp(0)))
-    s = r["stats"]
+    s = ipm(*standard(*rand_lp(0)), kkt="augmented")["stats"]
     assert (s["m"], s["n"], s["n_free"]) == (7, 14, 14) and s["nnz_LU"] >= s["nnz_K"] > 0
     assert s["t_factor"] > 0 and s["reg"] == (1e-10, 1e-10)
+    s = ipm(*standard(*rand_lp(0)))["stats"]
+    assert s["kkt"] == "normal" and s["nnz_factor"] == 28 and s["fallback"] == 0
 
 
 @pytest.mark.parametrize("seed", range(5))
@@ -222,3 +223,19 @@ def test_standard_does_not_mutate_its_input():
     data, ind, ptr = A.data.copy(), A.indices.copy(), A.indptr.copy()
     standard([1.0, 1, 1], A, [1, 1])
     assert (A.data == data).all() and (A.indices == ind).all() and (A.indptr == ptr).all()
+
+
+@pytest.mark.parametrize("seed", range(5))
+def test_normal_equations_agree_with_the_augmented_system(seed):
+    """Vanderbei Ch. 19: for an LP, (A H^-1 A' + dd I) dy = rp + A H^-1 rho gives the same
+    step as the quasi-definite system."""
+    S = standard(*rand_lp(seed))
+    a, b = ipm(*S, kkt="augmented"), ipm(*S, kkt="normal")
+    assert a["stats"]["kkt"] == "augmented" and b["stats"]["kkt"] == "normal"
+    assert b["status"] == "optimal" and b["f"] == pytest.approx(a["f"], abs=1e-7)
+
+
+def test_normal_equations_with_dependent_rows():
+    c, Ai, bi, Ae, be, l, u = CASES["duplicate equality rows"]
+    r = ipm(*standard(c, Ai, bi, Ae, be, l, u), kkt="normal")
+    assert r["status"] == "optimal" and r["f"] == pytest.approx(1.0, abs=1e-7)
