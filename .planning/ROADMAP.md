@@ -30,7 +30,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 6: Transit data and battery-free fleet** - Pinned GTFS snapshot, trip DAG, M0 by matching and flow (completed 2026-09-29)
 - [x] **Phase 7: Joint scheduling and charging** - Time-space graph, M1, schedule replay, scenario files (completed 2026-09-29)
 - [x] **Phase 8: Convex charging subproblems** - Fixed-integer M1-Q, M2, R3 by interior-point and barrier methods with (A5) (completed 2026-09-29)
-- [ ] **Phase 9: Outer approximation** - OA for M2 and R3 with M2-P and R3-P brackets
+- [x] **Phase 9: Outer approximation** - OA for M2 and R3 with M2-P and R3-P brackets (completed 2026-09-29)
 - [x] **Phase 10: Nonconvex and scenario extensions** - M3 local solutions, M4 scenario fleet (completed 2026-09-29)
 - [ ] **Phase 11: Studies and publication** - Experiment matrix, figures, regenerated README, executed validation record
 
@@ -95,8 +95,8 @@ Plans:
 
 Plans:
 
-- [ ] 03-01: Station graph, Floyd-Warshall, Pareto station paths, counts per instance
-- [ ] 03-02: R0, R1, R1-TR rows; HiGHS solves; enumeration on sub-instances
+- [x] 03-01: Station graph, Floyd-Warshall, Pareto station paths, counts per instance
+- [x] 03-02: R0, R1, R1-TR rows; HiGHS solves; enumeration on sub-instances
 - [ ] 03-03: evrp-python baseline run and replay; per-instance verdict table
 
 ### Phase 4: Branch-and-bound with interior-point nodes
@@ -134,9 +134,9 @@ Plans:
 
 Plans:
 
-- [ ] 05-01: Restricted master with both dual sources; initial columns from replayed solutions
-- [ ] 05-02: Exact ng-route labeling pricing with load and battery resources; dominance tests
-- [ ] 05-03: Bound tracking, restricted-master MILP, dual comparison study on the 2019 E set
+- [x] 05-01: Restricted master with both dual sources; initial columns from replayed solutions
+- [x] 05-02: Exact ng-route labeling pricing with load and battery resources; dominance tests
+- [x] 05-03: Bound tracking, restricted-master MILP, dual comparison study on the 2019 E set
 
 ### Phase 6: Transit data and battery-free fleet
 
@@ -215,9 +215,9 @@ Plans:
 
 Plans:
 
-- [ ] 09-01: OA engine: master, cuts (A6) and (R3.4), restoration, stall handling
-- [ ] 09-02: M2 with the M2-P bracket on the corridor
-- [ ] 09-03: R3 with the R3-P bracket on small E instances; parameter-grid comparisons
+- [x] 09-01: OA engine: master, cuts (A6) and (R3.4), restoration, stall handling
+- [x] 09-02: M2 with the M2-P bracket on the corridor
+- [x] 09-03: R3 with the R3-P bracket on small E instances; parameter-grid comparisons
 
 ### Phase 10: Nonconvex and scenario extensions
 
@@ -266,12 +266,12 @@ Phases execute in numeric order. Phases 2, 3, and 6 depend only on Phase 1, so a
 |-------|----------------|--------|-----------|
 | 1. Foundations and EVRP data | 3/3 | Complete    | 2026-09-28 |
 | 2. Interior-point core | 3/3 | Complete    | 2026-09-29 |
-| 3. Exact EVRP MILP | 0/3 | Not started | - |
+| 3. Exact EVRP MILP | 2/3 | In progress (EVRP-06: 15 runs open) | - |
 | 4. Branch-and-bound with interior-point nodes | 2/2 | Complete    | 2026-09-29 |
-| 5. Column-generation bound | 0/3 | Not started | - |
+| 5. Column-generation bound | 3/3 | Criterion 2 fails on E-n30-k3 | - |
 | 6. Transit data and battery-free fleet | 2/2 | Complete    | 2026-09-29 |
 | 7. Joint scheduling and charging | 3/3 | Complete    | 2026-09-29 |
 | 8. Convex charging subproblems | 2/2 | Complete    | 2026-09-29 |
-| 9. Outer approximation | 0/3 | Not started | - |
+| 9. Outer approximation | 3/3 | Complete | 2026-09-29 |
 | 10. Nonconvex and scenario extensions | 2/2 | Complete    | 2026-09-29 |
-| 11. Studies and publication | 0/2 | Not started | - |
+| 11. Studies and publication | 0/2 | In progress (runner done; 19 of 34 cases bundled) | - |

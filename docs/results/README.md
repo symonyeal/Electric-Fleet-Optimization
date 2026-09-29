@@ -10,17 +10,21 @@ L is the best valid lower bound (R1 and R2 dual bounds, and R0's bound, since z(
 |---|---:|---:|---:|---:|---:|---:|---:|---|---:|
 | E-n22-k4 | 384.678035 | 384.67 | 384.678093 | 375.279787 | 380.500541 | 384.678093 | 1.086% | bracketed | 0 |
 | E-n23-k3 | 573.130948 | 571.94 | 571.947383 | 568.562501 | 571.947383 | 571.947383 | 0.000% | certified optimal; report value not optimal | 0 |
-| E-n30-k3 | 511.253921 | 509.47 | - | - | 373.265356 | - | - | open | - |
-| E-n33-k4 | 869.892175 | 840.14 | - | - | - | - | - | open | - |
+| E-n30-k3 | 511.253921 | 509.47 | - | - | 484.567748 | 527.204910 | 8.087% | bracketed | 0 |
+| E-n33-k4 | 869.892175 | 840.14 | - | - | 662.122481 | - | - | open | - |
 | E-n51-k5 | 570.170703 | 529.90 | - | - | - | - | - | open | - |
 | E-n76-k7 | 723.367517 | 692.64 | - | - | - | - | - | open | - |
 | E-n101-k8 | 899.885589 | 839.29 | - | - | - | - | - | open | - |
 
 ## Interior versus simplex duals in R2 (CG-04)
 
-| Instance | Iterations (IPM / simplex) | Pricing calls | Seconds | Bound (IPM / simplex) | Converged |
-|---|---:|---:|---:|---:|---|
-| E-n22-k4 | 14 / 67 | 16 / 72 | 9.8 / 39.3 | 380.5005 / 380.5005 | True / True |
+Seconds are wall-clock on the processor named, and compare only within a row. The bound is the best (R2.2) from a completed exact pricing, within 1e-6 of the master LP when converged; '-' when no exact pricing completed in its limit.
+
+| Instance | Iterations (IPM / simplex) | Pricing calls | Seconds | Bound (IPM / simplex) | Converged | Processor |
+|---|---:|---:|---:|---:|---|---|
+| E-n22-k4 | 14 / 67 | 16 / 72 | 9.8 / 39.3 | 380.5005 / 380.5005 | True / True | not recorded |
+| E-n23-k3 | 59 / 226 | 68 / 238 | 197.6 / 416.5 | 561.7179 / 561.7179 | True / True | 13th Gen Intel(R) Core(TM) i5-1335U |
+| E-n30-k3 | 156 / 124 | 175 / 129 | 1823.7 / 849.8 | 417.9711 / 484.5677 | False / True | 13th Gen Intel(R) Core(TM) i5-1335U |
 
 ## Route 100 (Validation §3, TRN-09)
 
@@ -31,6 +35,24 @@ Illustrative battery, charger and cost parameters (data/scenarios/route100.toml)
 | Route 100 to 08:00 | 54 | 16 | 337.4 | 0 | 7,046.57 | 16 | 337.4 | 7,046.57 | 7,046.56 | 0.000% | optimal |
 | Route 100 to 10:00 | 77 | 16 | 358.7 | 0 | 7,123.65 | 16 | 358.7 | 7,123.65 | 7,062.86 | 0.853% | feasible_limit |
 | Route 100, full day | 219 | 16 | 646.2 | 16 | - | 21 | 681.8 | 11,157.24 | 7,070.54 | 36.628% | feasible_limit |
+
+## Charging physics (OA-04)
+
+Each row fixes the loss coefficient alpha (illustrative). M2 and R3 are solved by outer approximation, M1 and R1 by HiGHS, on the same instance. M2 against M1 compares cost; R3 against R1 compares the replayed route length, since R3 also prices energy and dwell time. 'With' is filled only when OA certified its value; the OA gap is on the model's own objective, and 'Without' carries the status of the model without losses. The declared 250 kWh battery charges nothing before 06:30; the 100 kWh rows are declared so that the window must charge. The eight-customer R3 row measures the size at which OA stops closing.
+
+| Model pair | Instance | Measure | alpha | Without | With | Increase | OA gap | Status | Seconds |
+|---|---|---|---:|---:|---:|---:|---:|---|---:|
+| M2 / M1 | route100 before 06:30, 250 kWh | cost | 3.3e-05 | 5,674.268 (optimal) | 5,674.268 | 0.000 | 0.000% | optimal | 2.4 |
+| M2 / M1 | route100 before 06:30, 250 kWh | cost | 6.7e-05 | 5,674.268 (optimal) | 5,674.268 | 0.000 | 0.000% | optimal | 2.8 |
+| M2 / M1 | route100 before 06:30, 250 kWh | cost | 0.00013 | 5,674.268 (optimal) | 5,674.268 | 0.000 | 0.000% | optimal | 2.1 |
+| M2 / M1 | route100 before 06:30, 100 kWh | cost | 3.3e-05 | 6,104.238 (optimal) | 6,104.290 | 0.053 | 0.000% | optimal | 133.4 |
+| M2 / M1 | route100 before 06:30, 100 kWh | cost | 6.7e-05 | 6,104.238 (optimal) | 6,104.345 | 0.107 | 0.000% | optimal | 177.5 |
+| M2 / M1 | route100 before 06:30, 100 kWh | cost | 0.00013 | 6,104.238 (optimal) | 6,104.446 | 0.208 | 0.000% | optimal | 188.1 |
+| R3 / R1 | E-n22-k4[2,3,4,5,6,22] | route length | 0 | 260.115 (optimal) | 263.285 | 3.170 | 0.000% | optimal | 156.8 |
+| R3 / R1 | E-n22-k4[2,3,4,5,6,22] | route length | 0.00025 | 260.115 (optimal) | 263.285 | 3.170 | 0.000% | optimal | 94.8 |
+| R3 / R1 | E-n22-k4[2,3,4,5,6,22] | route length | 0.0005 | 260.115 (optimal) | 263.285 | 3.170 | 0.000% | optimal | 78.9 |
+| R3 / R1 | E-n22-k4[2,3,4,5,6,22] | route length | 0.001 | 260.115 (optimal) | - | - | - | stall | 295.6 |
+| R3 / R1 | E-n22-k4[2,3,4,5,6,22,21,8] | route length | 0 | 272.961 (optimal) | - | - | 18.539% | stall | 1,203.5 |
 
 ## Figures
 

@@ -1,0 +1,91 @@
+{
+ "model": "R1",
+ "instance": "E-n30-k3",
+ "status": "feasible_limit",
+ "U": 527.204910352453,
+ "L": 360.5754889086118,
+ "gap_abs": 166.62942144384118,
+ "gap_rel": 0.3160619678835013,
+ "certified": false,
+ "defect": null,
+ "solver": {
+  "code": 1,
+  "message": "Time limit reached. (HiGHS Status 13: Time limit reached)"
+ },
+ "elapsed": 600.0792787000537,
+ "provenance": {
+  "revision": "9c00dc3",
+  "host": {
+   "cpu": "13th Gen Intel(R) Core(TM) i5-1335U",
+   "threads": 12,
+   "python": "3.14.3",
+   "numpy": "2.4.4",
+   "scipy": "1.17.1"
+  },
+  "instance": "E-n30-k3",
+  "key": "evrp-2019/E-n30-k3",
+  "sha256": "3bbff3bf0c9af17e719ecb9d6813a156ee4150a9b4af6d6b4569d77a0ec8db03",
+  "params": {
+   "time_limit": 600.0,
+   "mip_rel_gap": 1e-07
+  }
+ },
+ "routes": [
+  [
+   1,
+   5,
+   6,
+   3,
+   35,
+   23,
+   21,
+   20,
+   1
+  ],
+  [
+   1,
+   11,
+   12,
+   13,
+   9,
+   15,
+   10,
+   18,
+   8,
+   14,
+   17,
+   16,
+   31,
+   19,
+   24,
+   1
+  ],
+  [
+   1,
+   22,
+   1
+  ],
+  [
+   1,
+   27,
+   29,
+   28,
+   30,
+   36,
+   26,
+   25,
+   2,
+   7,
+   4,
+   1
+  ]
+ ],
+ "replay": {
+  "ok": true,
+  "defects": []
+ },
+ "objective": 527.2049103524529,
+ "paths": 3750,
+ "rows": 1741,
+ "nodes": 39211
+}

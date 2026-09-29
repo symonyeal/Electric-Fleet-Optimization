@@ -4,6 +4,12 @@ Measured 28 September 2026 on the system Python 3.14.7 (Windows 10, AMD64): nump
 SciPy 1.18.1 with its bundled HiGHS 1.12.0, pytest 9.1.1, ruff 0.16.7. Each statement below is
 pinned by a test in `tests/test_toolchain.py`; a SciPy upgrade that changes one fails there.
 
+On 29 September 2026 the same tests passed on a second machine, a 13th Gen Intel Core i5-1335U
+(Windows 11) with Python 3.14.3, numpy 2.4.4 and SciPy 1.17.1, which bundles the same HiGHS
+1.12.0. The benchmark runs of that date executed there. Since revision 9c00dc3 every result
+bundle names its processor and versions under `provenance.host`; elapsed times and
+time-limited bounds are comparable only between bundles that share them.
+
 | Capability | Finding | Consequence |
 | --- | --- | --- |
 | `milp` | Returns `mip_dual_bound`, `mip_gap`, `mip_node_count` with the incumbent | Lower bounds come from `mip_dual_bound`, never from `fun` |

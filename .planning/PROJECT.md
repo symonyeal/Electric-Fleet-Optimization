@@ -62,7 +62,7 @@ lower bound, with the gap stated, or an explicit status saying why not.
 ## Constraints
 
 - **Tech stack**: system Python 3.14, numpy, scipy (HiGHS via `milp`/`linprog`), stdlib; matplotlib at the reporting phase — user's single-environment rule
-- **Hardware**: AMD Ryzen 7 PRO 6850U, 24 GB RAM, no NVIDIA GPU — CUDA solvers unavailable; instance sizes chosen to fit
+- **Hardware**: AMD Ryzen 7 PRO 6850U, 24 GB RAM, no NVIDIA GPU — CUDA solvers unavailable; instance sizes chosen to fit. The 29 September 2026 benchmark runs used a second machine, an Intel Core i5-1335U with 16 GB; bundles name their host
 - **Rust/PyO3**: only for a kernel profiling identifies; R2 pricing is the first candidate
 - **Data**: third-party files fetched by pinned URL with SHA-256, committed only when terms permit
 - **Code style**: math-style skill; symbol names from the documents; algorithm boxes; no defensive clutter
