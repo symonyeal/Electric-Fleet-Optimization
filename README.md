@@ -30,7 +30,7 @@ Route 100 on 2026-10-07: 219 trips need 16 buses without batteries (M0). With th
 
 | Component | Model | Check |
 | --- | --- | --- |
-| [Routing](docs/ROUTING.md) | EVRP on a station-path multigraph (R1); battery-free fleet bound (R0) | The report's own formulation and brute-force enumeration on sub-instances |
+| [Routing](docs/ROUTING.md) | EVRP on a station-path multigraph (R1); battery-free distance bound (R0) | The report's own formulation and brute-force enumeration on sub-instances |
 | [Routing bound](docs/ROUTING.md) | Set-partitioning LP by column generation with interior-point duals (R2) | A Lagrangian bound valid at every iteration; replayed published solutions |
 | [Partial recharging](docs/ROUTING.md) | Convex MINLP with charging loss (R3) | Tangent and secant MILP bracket; conic cross-check at fixed routes |
 | [Transit](docs/MODELS.md) | Battery-free vehicle blocking (M0); joint scheduling and charging MILP (M1) | Matching against flow; agency blocks; schedule replay |
