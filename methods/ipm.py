@@ -74,7 +74,8 @@ def _step(v, dv, eta):
 
 
 def ipm(c, A, b, l, u, Q=None, eps=1e-8, delta=None, sigma=0.1, eta=0.9995, kmax=200,
-        dp=1e-10, dd=1e-10, kkt=None, trace=False, h=None, Jh=None, Hh=None):
+        dp=1e-10, dd=1e-10, kkt=None, trace=False, h=None, Jh=None, Hh=None,
+        time_limit=float("inf")):
     """Primal-dual path following; with h, for convex programs (Vanderbei Ch. 25).
 
     INPUT   c, A, b, l, u, Q .. problem data (A, Q sparse or dense; Q convex)
@@ -85,6 +86,7 @@ def ipm(c, A, b, l, u, Q=None, eps=1e-8, delta=None, sigma=0.1, eta=0.9995, kmax
             sigma, eta ...... centering parameter, fraction to the boundary
             dp, dd .......... primal and dual regularization of the Newton system
             kkt ............. "normal" or "augmented"; default normal for LPs with m <= 3000
+            time_limit ...... seconds; at the limit the status is `limit`, as at kmax
     OUTPUT  x, y, lam, a (= c + Qx - A'y + Jh'lam), f (objective), L (bound A3/A5), status
             (optimal, feasible_limit, limit, numerical), k, err (primal, dual, gap), stats,
             trace. Cost per iteration: one sparse LU of the (n + m) quasi-definite matrix.
@@ -94,6 +96,7 @@ def ipm(c, A, b, l, u, Q=None, eps=1e-8, delta=None, sigma=0.1, eta=0.9995, kmax
     Jh' ((mu - s lam - lam rh) / s) to the right-hand side, where rh = -h(x) - s; steps are
     common to primal and dual and backtrack on the residual merit.
     """
+    t_start = time.perf_counter()
     A = sp.csr_array(A, dtype=float)
     m, N = A.shape
     c, b, l, u = (np.asarray(v, float) for v in (c, b, l, u))
@@ -164,7 +167,7 @@ def ipm(c, A, b, l, u, Q=None, eps=1e-8, delta=None, sigma=0.1, eta=0.9995, kmax
         if not np.isfinite(g) or max(np.abs(x).max(initial=0), np.abs(y).max(initial=0)) > 1e14:
             status = "numerical"
             break
-        if k == kmax:
+        if k == kmax or time.perf_counter() - t_start > time_limit:
             break
         mu = sigma * g / nb
         rxz, rwv = mu - x * z, np.where(B, mu - w * v, 0.0)

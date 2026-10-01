@@ -11,30 +11,20 @@ can stop inside a face of optimal solutions; its point is used for the value onl
 """
 
 import itertools
+import time
 
 import numpy as np
 import scipy.sparse as sp
 from scipy.optimize import linprog
 from scipy.sparse.csgraph import maximum_bipartite_matching
 
+from checks.certificate import digest, provenance, record
+from checks.schedule import replay
+from data.scenario import validate
 from methods.ipm import ipm, standard
+from models.transit import compat, great_circle_km  # noqa: F401  (re-exported)
 
-
-def great_circle_km(a, b):
-    p1, p2 = np.radians(a["lat"]), np.radians(b["lat"])
-    h = np.sin((p2 - p1) / 2) ** 2 + np.cos(p1) * np.cos(p2) * np.sin(
-        np.radians(b["lon"] - a["lon"]) / 2) ** 2
-    return 2 * 6371.0088 * np.arcsin(np.sqrt(h))
-
-
-def compat(c, sc):
-    """[(i, j, tau_ij)] over trip indices with arr_i + tau_ij + layover <= dep_j (seconds);
-    tau = great-circle km x detour / speed. O(n^2)."""
-    T, S = c["trips"], c["stops"]
-    ends = {(t["last"], u["first"]) for t in T for u in T}
-    tau = {(a, b): 3600 * great_circle_km(S[a], S[b]) * sc["detour"] / sc["speed"] for a, b in ends}
-    return [(i, j, tau[t["last"], u["first"]]) for i, t in enumerate(T) for j, u in enumerate(T)
-            if t["arr"] + tau[t["last"], u["first"]] + sc["layover"] <= u["dep"] + 1e-9]
+VERSION = "M0/1"
 
 
 def m0(c, sc):
@@ -79,3 +69,32 @@ def m0(c, sc):
                 ipm=-r["f"], ipm_status=r["status"],
                 ipm_fractional=int(((x > 1e-6) & (x < 1 - 1e-6)).sum()),
                 duties=duties, blocks=len(blocks), block_violations=viol, pairs=m)
+
+
+def m0_record(c, v, name="corridor"):
+    """M0 under the result contract: U is the number of duties after the independent replay
+    (checks/schedule.py) accepts them as a time-connected cover; L is the least fleet n minus
+    the largest matching by Hopcroft-Karp, exact for a path cover of a DAG (Dilworth). The other
+    two formulations are kept beside them."""
+    validate(v)
+    sc = dict(speed=v["deadhead"]["speed"], detour=v["deadhead"]["detour"],
+              layover=v["time"]["layover"])
+    t0 = time.perf_counter()
+    r = m0(c, sc)
+    dt = time.perf_counter() - t0
+    rp = replay(c, r["duties"], sc)
+    agree = r["fleet"] == r["flow"] == r["hopcroft_karp"]
+    return record("M0", name, "optimal" if agree else "numerical",
+                  U=len(r["duties"]) if rp["ok"] else None, L=r["hopcroft_karp"],
+                  validation="replayed" if rp["ok"] else "validation_failed",
+                  bound_source="matching", solver=dict(code=None, message=(
+                      "matching LP, min-cost flow and Hopcroft-Karp agree" if agree else
+                      "the three M0 formulations disagree")), elapsed=dt,
+                  provenance=provenance(dict(name=name, sha256=c.get("source", {}).get(
+                      "sha256")), formulation=VERSION, corridor=digest(dict(
+                          trips=c["trips"], stops=c["stops"])), scenario=digest(v)),
+                  trips=len(c["trips"]), replay=dict(ok=rp["ok"], defects=rp["defects"],
+                                                     deadhead_km=rp["deadhead_km"]),
+                  **{k: r[k] for k in ("fleet", "flow", "hopcroft_karp", "ipm", "ipm_status",
+                                       "ipm_fractional", "duties", "blocks", "block_violations",
+                                       "pairs")})

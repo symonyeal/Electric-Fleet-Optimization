@@ -8,9 +8,12 @@ The master is the MILP with every c_k replaced by the tangent cuts collected so 
 which are valid everywhere because c_k is convex; HiGHS's dual bound of the master is therefore a
 lower bound L on the MINLP. Each master solution's integers are fixed and the convex subproblem
 solved; a solution that passes the independent validation gives an upper bound U. Cuts are added
-at the master point and at the subproblem point. The loop stops when U - L is within tolerance,
-at a limit, or with status `stall` when the master repeats an assignment and no cut is violated.
-A subproblem failure never excludes an assignment: it only adds cuts at the master point.
+at the master point and at the subproblem point. The loop stops when |U - L| is within the
+tolerance of checks/certificate.py, at a limit, with status `stall` when the master repeats an
+assignment and no cut is violated, or with status `numerical` when L exceeds U by more than the
+tolerance (a wrong cut, bound or check, never an optimum). One deadline covers the run: each
+master MILP gets at most the time left. A subproblem failure never excludes an assignment: it
+only adds cuts at the master point.
 """
 
 import time
@@ -18,6 +21,8 @@ import time
 import numpy as np
 import scipy.sparse as sp
 from scipy.optimize import Bounds, LinearConstraint, milp
+
+from checks.certificate import gap_state
 
 
 def cut(con, v):
@@ -36,7 +41,7 @@ def oa(c, A, lo, hi, l, u, integ, cons, subproblem, validate=None, points=(), ep
             validate ... v -> (ok, U): independent check of a subproblem solution (default
                          accepts it at its value)
             points ..... initial vectors at which to add cuts
-    OUTPUT  status (optimal, feasible_limit, no_incumbent, infeasible, stall), U, L, v,
+    OUTPUT  status (optimal, feasible_limit, no_incumbent, infeasible, stall, numerical), U, L, v,
             iterations [(k, L, U, cuts, violation)], cuts, elapsed
     """
     A = sp.csr_array(A)
@@ -48,7 +53,8 @@ def oa(c, A, lo, hi, l, u, integ, cons, subproblem, validate=None, points=(), ep
     J = np.flatnonzero(integ)
     status = "feasible_limit"
     for k in range(1, max_iter + 1):
-        if time.perf_counter() - t0 > time_limit:
+        left = time_limit - (time.perf_counter() - t0)
+        if left <= 0:
             break
         C = [LinearConstraint(A, lo, hi)]
         if rows:
@@ -60,7 +66,7 @@ def oa(c, A, lo, hi, l, u, integ, cons, subproblem, validate=None, points=(), ep
             T = sp.csr_array((d_, (r_, c_)), shape=(len(rows), len(c)))
             C.append(LinearConstraint(T, -np.inf, np.array([b for _, _, b in rows])))
         res = milp(c, constraints=C, integrality=integ, bounds=Bounds(l, u),
-                   options=dict(time_limit=master_limit, mip_rel_gap=eps_rel / 10))
+                   options=dict(time_limit=min(master_limit, left), mip_rel_gap=eps_rel / 10))
         if res.status == 2:
             status = "infeasible" if not np.isfinite(U) else status
             break
@@ -80,7 +86,11 @@ def oa(c, A, lo, hi, l, u, integ, cons, subproblem, validate=None, points=(), ep
             new += [cut(con, w) for con in cons]
         hist.append(dict(k=k, L=L, U=U if np.isfinite(U) else None, cuts=len(rows),
                          violation=viol, sub=st))
-        if np.isfinite(U) and U - L <= eps_abs + eps_rel * max(1.0, abs(U)):
+        g = gap_state(U if np.isfinite(U) else None, L, eps_abs, eps_rel)
+        if g == "crossed":                    # L > U + tol: the bound or the check is wrong
+            status = "numerical"
+            break
+        if g == "closed":
             status = "optimal"
             break
         if key in seen and viol <= tol:

@@ -84,6 +84,21 @@ def test_early_stopped_nodes_give_valid_bounds():
 
 
 def test_incumbent_needs_validation():
+    """Every candidate refused: no incumbent, and the refused nodes keep their bounds."""
     c, A, lo, hi, l, u = knapsack(0)
     r = bnb(c, A, lo, hi, l, u, np.ones(len(c)), validate=lambda v: (False, None))
-    assert r["U"] is None and r["status"] == "no_incumbent" and r["rejected"] > 0
+    assert r["U"] is None and r["rejected"] > 0
+    assert r["status"] in ("validation_failed", "no_incumbent") and r["L"] is not None
+    assert r["L"] <= highs(c, A, lo, hi, l, u, np.ones(len(c))) + 1e-6
+
+
+def test_default_check_reads_the_rows():
+    """Without a validator, a candidate is accepted only if it satisfies the original rows."""
+    from methods.branch import primal
+    A = np.array([[1.0, 1.0]])
+    assert primal(np.array([1.0, 0.0]), A, np.array([1.0]), np.array([1.0]), np.zeros(2),
+                  np.ones(2), np.array([0, 1]))
+    assert not primal(np.array([1.0, 1.0]), A, np.array([1.0]), np.array([1.0]), np.zeros(2),
+                      np.ones(2), np.array([0, 1]))
+    assert not primal(np.array([0.5, 0.5]), A, np.array([1.0]), np.array([1.0]), np.zeros(2),
+                      np.ones(2), np.array([0, 1]))

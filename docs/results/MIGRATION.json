@@ -1,0 +1,336 @@
+{
+ "baseline/E-n22-k4-GSGA-seed0.json": {
+  "decision": "retained",
+  "reason": "upper bound only, certified by replay of its routes; clean revision 2196226",
+  "revision": "2196226",
+  "model": "GSGA",
+  "bound_source": null,
+  "formulation": null,
+  "artifacts": {
+   "routes": "9db235179a877d2960c90a0bcb7bbdc5052f2b9e215708b0a900ee3704a5b3d7"
+  }
+ },
+ "baseline/E-n22-k4-GSGA-seed1.json": {
+  "decision": "retained",
+  "reason": "as seed 0",
+  "revision": "2196226",
+  "model": "GSGA",
+  "bound_source": null,
+  "formulation": null,
+  "artifacts": {
+   "routes": "1e598e8d1273532cdf8f1668958b8bde5eb3d8789665ed049a9fa8e0fc21e534"
+  }
+ },
+ "baseline/E-n22-k4-GSGA-seed2.json": {
+  "decision": "retained",
+  "reason": "as seed 0",
+  "revision": "2196226",
+  "model": "GSGA",
+  "bound_source": null,
+  "formulation": null,
+  "artifacts": {
+   "routes": "221bd474025c07a77b696a98d199ed90185d61685390fd66d80d4c5f89aed595"
+  }
+ },
+ "baseline/E-n23-k3-GSGA-seed0.json": {
+  "decision": "provenance-limited",
+  "reason": "written from a dirty tree (1d6860b+dirty): the revision alone does not reproduce it; its routes still replay, so the replayed length stands as an upper bound",
+  "revision": "1d6860b+dirty",
+  "model": "GSGA",
+  "bound_source": null,
+  "formulation": null,
+  "artifacts": {
+   "routes": "0e101e2b11d1b57c212e87b32ed129547fe7fa9764ddb5ad8834160aa9dac40f"
+  }
+ },
+ "baseline/E-n23-k3-GSGA-seed1.json": {
+  "decision": "provenance-limited",
+  "reason": "as seed 0",
+  "revision": "1d6860b+dirty",
+  "model": "GSGA",
+  "bound_source": null,
+  "formulation": null,
+  "artifacts": {
+   "routes": "2a26e20989fc27c35056a32b954b80e66975b8e29ae4dfbd1170857c97e567a1"
+  }
+ },
+ "evrp/E-n22-k4-R0.json": {
+  "decision": "rerun-required",
+  "reason": "written from a dirty tree (16d5d58+dirty): the revision alone does not reproduce it",
+  "revision": "16d5d58+dirty",
+  "model": "R0",
+  "bound_source": "highs_dual",
+  "formulation": "R0/1",
+  "artifacts": {
+   "routes": "79fc001c6b6145b7f13e2ef8429118024de8e824d39a579e10361eadc39d7ebb"
+  }
+ },
+ "evrp/E-n22-k4-R1.json": {
+  "decision": "provenance-limited",
+  "reason": "written from a dirty tree (5409b87+dirty): the revision alone does not reproduce it; not decisive, R2's bound is higher; rerun is a 600 s case",
+  "revision": "5409b87+dirty",
+  "model": "R1",
+  "bound_source": "highs_dual",
+  "formulation": "R1/1",
+  "artifacts": {
+   "routes": "be4872848b6f2e2bcfc7882ed75856e20894306d167fd2f6716d0e3c5b4237c3"
+  }
+ },
+ "evrp/E-n22-k4-R2-ipm.json": {
+  "decision": "invalid",
+  "reason": "status optimal with certified false and a 1.086% gap contradicts the result contract; also written from a dirty tree (eff961f+dirty): the revision alone does not reproduce it; rerun",
+  "revision": "eff961f+dirty",
+  "model": "R2",
+  "bound_source": "r22_exact_pricing",
+  "formulation": "R2/1",
+  "artifacts": {
+   "routes": "c9880bf45bf289fccb333e1a58262abe23d02d8c90a12aac114c2dfcbb4bfc07"
+  }
+ },
+ "evrp/E-n22-k4-R2-simplex.json": {
+  "decision": "invalid",
+  "reason": "as R2-ipm",
+  "revision": "eff961f+dirty",
+  "model": "R2",
+  "bound_source": "r22_exact_pricing",
+  "formulation": "R2/1",
+  "artifacts": {
+   "routes": "c9880bf45bf289fccb333e1a58262abe23d02d8c90a12aac114c2dfcbb4bfc07"
+  }
+ },
+ "evrp/E-n23-k3-R0.json": {
+  "decision": "rerun-required",
+  "reason": "written from a dirty tree (16d5d58+dirty): the revision alone does not reproduce it",
+  "revision": "16d5d58+dirty",
+  "model": "R0",
+  "bound_source": "highs_dual",
+  "formulation": "R0/1",
+  "artifacts": {
+   "routes": "8c59d8de155e09ab08ef4dc46076c8437cec3ddbc24f8e22f0e9ef2ecdd7441d"
+  }
+ },
+ "evrp/E-n23-k3-R1.json": {
+  "decision": "rerun-required",
+  "reason": "written from a dirty tree (5762f3c+dirty): the revision alone does not reproduce it; decisive (the only certificate of E-n23-k3), so rerun on a clean revision",
+  "revision": "5762f3c+dirty",
+  "model": "R1",
+  "bound_source": "highs_dual",
+  "formulation": "R1/1",
+  "artifacts": {
+   "routes": "16e6c8651c96e35cc8008fcea698ef0593ccd760dcc84621355ac5eac225d7cb"
+  }
+ },
+ "evrp/E-n23-k3-R2-ipm.json": {
+  "decision": "retained",
+  "reason": "routing formulation files unchanged from 9c00dc3 to 098642b (git diff empty: route.py, paths.py, colgen.py, recharge.py, checks/route.py, data/evrp.py, oa.py, ipm.py); clean revision",
+  "revision": "9c00dc3",
+  "model": "R2",
+  "bound_source": "r22_exact_pricing",
+  "formulation": "R2/1",
+  "artifacts": {
+   "routes": "0e101e2b11d1b57c212e87b32ed129547fe7fa9764ddb5ad8834160aa9dac40f"
+  }
+ },
+ "evrp/E-n23-k3-R2-simplex.json": {
+  "decision": "retained",
+  "reason": "routing formulation files unchanged from 9c00dc3 to 098642b (git diff empty: route.py, paths.py, colgen.py, recharge.py, checks/route.py, data/evrp.py, oa.py, ipm.py); clean revision",
+  "revision": "9c00dc3",
+  "model": "R2",
+  "bound_source": "r22_exact_pricing",
+  "formulation": "R2/1",
+  "artifacts": {
+   "routes": "0e101e2b11d1b57c212e87b32ed129547fe7fa9764ddb5ad8834160aa9dac40f"
+  }
+ },
+ "evrp/E-n30-k3-R0.json": {
+  "decision": "provenance-limited",
+  "reason": "written from a dirty tree (6b290be+dirty): the revision alone does not reproduce it; rerun is a 600 s case",
+  "revision": "6b290be+dirty",
+  "model": "R0",
+  "bound_source": "highs_dual",
+  "formulation": "R0/1",
+  "artifacts": {
+   "routes": "45c034ee7645eaa0d1c2819897126703a2f53605cd17420f96f62f02a1fdd4b2"
+  }
+ },
+ "evrp/E-n30-k3-R1.json": {
+  "decision": "retained",
+  "reason": "routing formulation files unchanged from 9c00dc3 to 098642b (git diff empty: route.py, paths.py, colgen.py, recharge.py, checks/route.py, data/evrp.py, oa.py, ipm.py); clean revision",
+  "revision": "9c00dc3",
+  "model": "R1",
+  "bound_source": "highs_dual",
+  "formulation": "R1/1",
+  "artifacts": {
+   "routes": "0f55566bef2330ba30e28b8b23a9422da8fe5d36b3d97fbc32ba5e2b7cbd06ac"
+  }
+ },
+ "evrp/E-n30-k3-R2-ipm.json": {
+  "decision": "retained",
+  "reason": "routing formulation files unchanged from 9c00dc3 to 098642b (git diff empty: route.py, paths.py, colgen.py, recharge.py, checks/route.py, data/evrp.py, oa.py, ipm.py); clean revision",
+  "revision": "9c00dc3",
+  "model": "R2",
+  "bound_source": "r22_exact_pricing",
+  "formulation": "R2/1",
+  "artifacts": {
+   "routes": "6409d52e1d9d3e0813aa9cafe6654d0ba7ca934ae043d76f62e870890e2646d6"
+  }
+ },
+ "evrp/E-n30-k3-R2-simplex.json": {
+  "decision": "retained",
+  "reason": "routing formulation files unchanged from 9c00dc3 to 098642b (git diff empty: route.py, paths.py, colgen.py, recharge.py, checks/route.py, data/evrp.py, oa.py, ipm.py); clean revision",
+  "revision": "9c00dc3",
+  "model": "R2",
+  "bound_source": "r22_exact_pricing",
+  "formulation": "R2/1",
+  "artifacts": {
+   "routes": "80646ab5a8f2c8383478e474467d3f268f5eaf87ab8d490e2263497ff1b22f5b"
+  }
+ },
+ "evrp/E-n33-k4-R0.json": {
+  "decision": "retained",
+  "reason": "routing formulation files unchanged from 474149b to 098642b (git diff empty: route.py, paths.py, colgen.py, recharge.py, checks/route.py, data/evrp.py, oa.py, ipm.py); clean revision",
+  "revision": "474149b",
+  "model": "R0",
+  "bound_source": "highs_dual",
+  "formulation": "R0/1",
+  "artifacts": {
+   "routes": "6fa07a85d7f91f01109a35f03d043c234567c2a03db4d0e4861eda717935c108"
+  }
+ },
+ "grid/grid.json#M2 / M1|route100 before 06:30, 100 kWh|0.00013": {
+  "decision": "stale",
+  "revision": "474149b",
+  "model": "M2",
+  "formulation": "M2/1",
+  "bound_source": "oa_master_dual",
+  "reason": "M2 inherits M1/2 (2026-10-01); recompute with run_bench.py --grid --missing"
+ },
+ "grid/grid.json#M2 / M1|route100 before 06:30, 100 kWh|3.3e-05": {
+  "decision": "stale",
+  "revision": "474149b",
+  "model": "M2",
+  "formulation": "M2/1",
+  "bound_source": "oa_master_dual",
+  "reason": "M2 inherits M1/2 (2026-10-01); recompute with run_bench.py --grid --missing"
+ },
+ "grid/grid.json#M2 / M1|route100 before 06:30, 100 kWh|6.7e-05": {
+  "decision": "stale",
+  "revision": "474149b",
+  "model": "M2",
+  "formulation": "M2/1",
+  "bound_source": "oa_master_dual",
+  "reason": "M2 inherits M1/2 (2026-10-01); recompute with run_bench.py --grid --missing"
+ },
+ "grid/grid.json#M2 / M1|route100 before 06:30, 250 kWh|0.00013": {
+  "decision": "stale",
+  "revision": "474149b",
+  "model": "M2",
+  "formulation": "M2/1",
+  "bound_source": "oa_master_dual",
+  "reason": "M2 inherits M1/2 (2026-10-01); recompute with run_bench.py --grid --missing"
+ },
+ "grid/grid.json#M2 / M1|route100 before 06:30, 250 kWh|3.3e-05": {
+  "decision": "stale",
+  "revision": "474149b",
+  "model": "M2",
+  "formulation": "M2/1",
+  "bound_source": "oa_master_dual",
+  "reason": "M2 inherits M1/2 (2026-10-01); recompute with run_bench.py --grid --missing"
+ },
+ "grid/grid.json#M2 / M1|route100 before 06:30, 250 kWh|6.7e-05": {
+  "decision": "stale",
+  "revision": "474149b",
+  "model": "M2",
+  "formulation": "M2/1",
+  "bound_source": "oa_master_dual",
+  "reason": "M2 inherits M1/2 (2026-10-01); recompute with run_bench.py --grid --missing"
+ },
+ "grid/grid.json#R3 / R1|E-n22-k4[2,3,4,5,6,22,21,8]|0": {
+  "decision": "retained",
+  "revision": "9c00dc3",
+  "model": "R3",
+  "formulation": "R3/1",
+  "bound_source": "oa_master_dual",
+  "reason": "routing formulation files unchanged from 9c00dc3 to 098642b (git diff empty: route.py, paths.py, colgen.py, recharge.py, checks/route.py, data/evrp.py, oa.py, ipm.py); clean revision"
+ },
+ "grid/grid.json#R3 / R1|E-n22-k4[2,3,4,5,6,22]|0": {
+  "decision": "retained",
+  "revision": "474149b",
+  "model": "R3",
+  "formulation": "R3/1",
+  "bound_source": "oa_master_dual",
+  "reason": "routing formulation files unchanged from 474149b to 098642b (git diff empty: route.py, paths.py, colgen.py, recharge.py, checks/route.py, data/evrp.py, oa.py, ipm.py); clean revision"
+ },
+ "grid/grid.json#R3 / R1|E-n22-k4[2,3,4,5,6,22]|0.00025": {
+  "decision": "retained",
+  "revision": "474149b",
+  "model": "R3",
+  "formulation": "R3/1",
+  "bound_source": "oa_master_dual",
+  "reason": "routing formulation files unchanged from 474149b to 098642b (git diff empty: route.py, paths.py, colgen.py, recharge.py, checks/route.py, data/evrp.py, oa.py, ipm.py); clean revision"
+ },
+ "grid/grid.json#R3 / R1|E-n22-k4[2,3,4,5,6,22]|0.0005": {
+  "decision": "retained",
+  "revision": "474149b",
+  "model": "R3",
+  "formulation": "R3/1",
+  "bound_source": "oa_master_dual",
+  "reason": "routing formulation files unchanged from 474149b to 098642b (git diff empty: route.py, paths.py, colgen.py, recharge.py, checks/route.py, data/evrp.py, oa.py, ipm.py); clean revision"
+ },
+ "grid/grid.json#R3 / R1|E-n22-k4[2,3,4,5,6,22]|0.001": {
+  "decision": "retained",
+  "revision": "474149b",
+  "model": "R3",
+  "formulation": "R3/1",
+  "bound_source": "oa_master_dual",
+  "reason": "routing formulation files unchanged from 474149b to 098642b (git diff empty: route.py, paths.py, colgen.py, recharge.py, checks/route.py, data/evrp.py, oa.py, ipm.py); clean revision"
+ },
+ "transit/route100-M0.json": {
+  "decision": "rerun-required",
+  "reason": "written from a dirty tree (6b290be+dirty): the revision alone does not reproduce it; M0 runs in seconds",
+  "revision": "6b290be+dirty",
+  "model": "M0",
+  "bound_source": "matching",
+  "formulation": null
+ },
+ "transit/route100-M1.json": {
+  "decision": "stale",
+  "reason": "M1/2 changed the objective and rows on 2026-10-01 (base load on the open site's meter, nonnegative depot restoration); the stored L bounds the M1/1 objective; also written from a dirty tree (64f6888+dirty): the revision alone does not reproduce it; rerun is an 1,800 s case",
+  "revision": "64f6888+dirty",
+  "model": "M1",
+  "bound_source": "highs_dual",
+  "formulation": "M1/1"
+ },
+ "transit/route100-until10h-M0.json": {
+  "decision": "rerun-required",
+  "reason": "as route100-M0",
+  "revision": "6b290be+dirty",
+  "model": "M0",
+  "bound_source": "matching",
+  "formulation": null
+ },
+ "transit/route100-until10h-M1.json": {
+  "decision": "stale",
+  "reason": "M1/2 changed the objective and rows on 2026-10-01 (base load on the open site's meter, nonnegative depot restoration); the stored L bounds the M1/1 objective; also written from a dirty tree (6d50037+dirty): the revision alone does not reproduce it; rerun is a 900 s case",
+  "revision": "6d50037+dirty",
+  "model": "M1",
+  "bound_source": "highs_dual",
+  "formulation": "M1/1"
+ },
+ "transit/route100-until8h-M0.json": {
+  "decision": "rerun-required",
+  "reason": "as route100-M0",
+  "revision": "6b290be+dirty",
+  "model": "M0",
+  "bound_source": "matching",
+  "formulation": null
+ },
+ "transit/route100-until8h-M1.json": {
+  "decision": "stale",
+  "reason": "M1/2 changed the objective and rows on 2026-10-01 (base load on the open site's meter, nonnegative depot restoration); the stored L bounds the M1/1 objective; also written from a dirty tree (6d50037+dirty): the revision alone does not reproduce it",
+  "revision": "6d50037+dirty",
+  "model": "M1",
+  "bound_source": "highs_dual",
+  "formulation": "M1/1"
+ }
+}

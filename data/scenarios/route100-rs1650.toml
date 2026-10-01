@@ -32,7 +32,7 @@ gamma = {value = 1.0e-4, unit = "CAD/(kW^2 h)", source = "illustrative"}  # M1-Q
 [sites.marpole]
 name = "Marpole Loop"
 stops = ["745", "12027"]
-nbar = {value = 5.0, unit = "plugs", source = "TransLink 2025-06-27: 10 on-route overhead chargers; 5 per loop is an inference"}
+nbar = {value = 5.0, unit = "plugs", source = "illustrative: TransLink 2025-06-27 counts 10 on-route chargers system-wide; their split between the loops is not published"}
 G0 = {value = 0.0, unit = "kW", source = "illustrative"}
 hbar = {value = 1500.0, unit = "kW", source = "illustrative"}
 L = {value = 0.0, unit = "kW", source = "illustrative"}                 # other load at the site
@@ -40,7 +40,7 @@ L = {value = 0.0, unit = "kW", source = "illustrative"}                 # other 
 [sites.station22]
 name = "22nd Street Station"
 stops = ["5989", "10929"]
-nbar = {value = 5.0, unit = "plugs", source = "TransLink 2025-06-27: 10 on-route overhead chargers; 5 per loop is an inference"}
+nbar = {value = 5.0, unit = "plugs", source = "illustrative: TransLink 2025-06-27 counts 10 on-route chargers system-wide; their split between the loops is not published"}
 G0 = {value = 0.0, unit = "kW", source = "illustrative"}
 hbar = {value = 1500.0, unit = "kW", source = "illustrative"}
 L = {value = 0.0, unit = "kW", source = "illustrative"}
@@ -52,7 +52,7 @@ site = {value = 300.0, unit = "CAD/day", source = "illustrative"}
 plug = {value = 100.0, unit = "CAD/plug/day", source = "illustrative"}
 upgrade = {value = 0.05, unit = "CAD/kW/day", source = "illustrative"}
 energy = {value = 0.1137, unit = "CAD/kWh", source = "BC Hydro Electric Tariff RS 1650 Rev 12 (2026-04-01): energy 11.37 c/kWh (F2027)"}
-depot_energy = {value = 0.0838, unit = "CAD/kWh", source = "BC Hydro Electric Tariff RS 1640 Rev 13 (2026-04-01): energy 8.38 c/kWh"}
-peak = {value = 0.075945, unit = "CAD/kW/day", source = "BC Hydro Electric Tariff RS 1650 Rev 12: $2.31/kW of Billing Demand (F2027), x 12/365"}
+depot_energy = {value = 0.0838, unit = "CAD/kWh", source = "BC Hydro Electric Tariff RS 1640 Rev 13 (2026-04-01): energy 8.38 c/kWh; depot charging in 22:00-06:00 is assumed, not modeled"}
+peak = {value = 0.075945, unit = "CAD/kW/day", source = "BC Hydro Electric Tariff RS 1650 Rev 12: $2.31/kW of Billing Demand (F2027) x 12/365, a normalized daily sensitivity weight, not a bill"}
 basic = {value = 0.2999, unit = "CAD/day/site", source = "BC Hydro Electric Tariff RS 1650 Rev 12: basic 29.99 c/day"}
 rider = {value = -0.015, unit = "1", source = "BC Hydro Electric Tariff RS 1901 Rev 13 '(1.5)%' as a credit; RS 1904 Rev 2: 0%"}

@@ -6,7 +6,7 @@ y_j on departing it, E_j = kappa km_j the trip, e_ij the deadhead. A bus may cha
 stop, when it is a charging site s(j), in the window of slots t before dep_j, with power p_jt
 (battery side, kW) on a plug u_jt; the slot must lie wholly after the predecessor's arrival.
     min  F sum x_0j + c_dh (deadhead km) + sum_s ((f + rho c_b) o_s + a n_s + b h_s + rho pi D_s)
-         + rho c_e (Delta/eta) sum p_jt + rho (c_dep/eta) sum_i (s0 B x_0i - z_i)
+         + rho c_e (Delta/eta) sum p_jt + rho (c_dep/eta) sum_i r_i
 with rho = 1 + rider and c_b the utility's basic charge per metered site (tariff(); 1 and 0
 when the scenario declares no tariff).
     sum_i x_ij + x_0j = 1,  sum_j x_ij + x_i0 = 1                            (2), (3)
@@ -14,60 +14,53 @@ when the scenario declares no tariff).
     y_j = a_j + Delta sum_t p_jt,   rB <= a_j,   rB + E_j <= y_j <= smax B    (7), (8)
     p_jt <= P u_jt,   u_jt <= x_0j + sum_{i present at t} x_ij                (4)
     sum_j u_jt <= n_s <= nbar o_s,   h_s <= hbar o_s                          (5)
-    L_s + sum_j p_jt / eta <= G0_s + h_s,   D_s >= L_s + sum_j p_jt / eta      (6)
+    L_s o_s + sum_j p_jt / eta <= G0_s + h_s,   D_s >= L_s o_s + sum_j p_jt / eta    (6)
       (D_s over the slots of the billing-demand window only, Data §3)
-    y_i - E_i - e_i0 >= rB  if x_i0 = 1;   z_i <= y_i - E_i - e_i0, z_i <= smax B x_i0.
+    L_s o_s <= G0_s + h_s,   D_s >= L_s o_s                                    (6), per site
+    y_i - E_i - e_i0 >= rB  if x_i0 = 1;   r_i >= s0 B - (y_i - E_i - e_i0)  if x_i0 = 1,  r_i >= 0.
+
+L_s is load on the site's own meter, which exists only when the site opens (its basic charge is
+paid per open site): its demand and capacity terms carry o_s and are written once per site, not
+only in the slots where some charging column happens to exist. r_i is the energy the depot
+restores overnight to bring bus i back to s0 B, an external recovery priced at the depot rate:
+a bus returning above s0 B is credited nothing, since the model has no export decision. The
+recovery itself (plugs, power, the 22:00-06:00 window, the next day's circulation) is not
+modeled, so no schedule is claimed to repeat day after day (Models §3a).
+
 The whole trip's energy is taken at its start, which enforces the reserve conservatively
 (Models §1). The per-bus time-space form of the design has the same schedules but a symmetric
 bus index; the connection form has none (Models §3 records the change).
 """
 
-import math
 import time
 
 import numpy as np
 
 from checks.certificate import provenance, record
 from checks.schedule import replay_energy
-from models.network import compat, great_circle_km
-from models.route import Rows, solve, status
+from data.scenario import billed
+from models.milp import Rows, solve, status
+from models.transit import compile
+
+VERSION = "M1/2"      # 2: base load on the open site's meter; nonnegative depot restoration
 
 
 def tariff(co):
     """Electricity tariff terms of a scenario's cost table (Data §3): the multiplier 1 + rider on
     every electricity charge (energy, demand, basic), and the billing-demand window in seconds of
-    the day. Absent keys give 1 and the whole day."""
+    the day (w0 > w1 wraps across midnight). Absent keys give 1 and the whole day."""
     return (1 + co.get("rider", 0.0), 3600 * co.get("peak_from", 0.0),
             3600 * co.get("peak_to", 24.0))
 
 
 def instance(c, v):
-    """Everything M1 needs from a corridor c and a scenario v (data.scenario.load)."""
-    T, S = c["trips"], c["stops"]
-    dh, b, ch, t = v["deadhead"], v["battery"], v["charger"], v["time"]
-    sc = dict(speed=dh["speed"], detour=dh["detour"], layover=t["layover"])
-    site = {stop: s for s, d in v["sites"].items() for stop in d["stops"]}
-    depot = dict(lat=v["depot"]["lat"], lon=v["depot"]["lon"])
-    km = lambda a, z: great_circle_km(a, z) * dh["detour"]
-    P = compat(c, sc)
-    D, W = t["delta"], t["window"]
-    win = {}
-    for j, tr in enumerate(T):
-        if site.get(tr["first"]):
-            win[j] = list(range(math.ceil((tr["dep"] - W) / D), math.floor(tr["dep"] / D)))
-    return dict(T=T, n=len(T), P=P, site=site, sites=list(v["sites"]), win=win,
-                E=np.array([b["kappa"] * tr["km"] for tr in T]),
-                km_ij=[km(S[T[i]["last"]], S[T[j]["first"]]) for i, j, _ in P],
-                km0=np.array([km(depot, S[tr["first"]]) for tr in T]),
-                km1=np.array([km(S[tr["last"]], depot) for tr in T]),
-                arrive={(i, j): T[i]["arr"] + tau for i, j, tau in P}, v=v, D=D, P_max=ch["P"],
-                eta=ch["eta"], B=b["B"], rB=b["reserve"] * b["B"], top=b["smax"] * b["B"],
-                s0B=b["s0"] * b["B"], kappa=b["kappa"])
+    """Everything M1 needs from a corridor c and a scenario v: the compiled instance."""
+    return compile(c, v)
 
 
-def rows(c, v, fixed=None, loss=False):
+def rows(c, v, fixed=None, loss=False, inst=None):
     """M1 as data (c, R, lb, ub, integ) with the index maps; fixed = {site: dict(n, h)} fixes the
-    infrastructure (sites open).
+    infrastructure (sites open). inst is the compiled instance of (c, v), built here if absent.
 
     loss=True gives the linear rows of M2 (Models §4): grid power g_jt in [0, gbar u_jt] replaces
     p_jt/eta in the grid, peak and energy terms, and the taper (11), p_jt <= P (1 - e_j,t+1 / B),
@@ -75,7 +68,8 @@ def rows(c, v, fixed=None, loss=False):
     g_jt >= p_jt/eta + alpha p_jt^2, are returned as index pairs M["loss"] = [(p, g)]: they are
     not linear, and the barrier solver and outer approximation treat them.
     """
-    m = instance(c, v)
+    m = inst if inst is not None else compile(c, v)
+    v = m["v"]
     n, P, sites, win = m["n"], m["P"], m["sites"], m["win"]
     E, kappa, top, rB, s0B, Pm, eta, dt = (m[k] for k in ("E", "kappa", "top", "rB", "s0B",
                                                          "P_max", "eta", "D"))
@@ -89,7 +83,7 @@ def rows(c, v, fixed=None, loss=False):
         return idx[key]
 
     x0, x1, xc = var("x0", n), var("x1", n), var("xc", len(P))
-    a, y, z = var("a", n), var("y", n), var("z", n)
+    a, y, r = var("a", n), var("y", n), var("r", n)
     K = [(j, t) for j in sorted(win) for t in win[j]]
     p, u = var("p", len(K)), var("u", len(K))
     g = var("g", len(K)) if loss else None
@@ -99,7 +93,7 @@ def rows(c, v, fixed=None, loss=False):
     integ[x0:xc + len(P)] = 1
     lb[a:a + n], ub[a:a + n] = rB, top
     lb[y:y + n], ub[y:y + n] = rB + E, top
-    ub[z:z + n] = top
+    ub[r:r + n] = s0B - rB
     ub[p:p + len(K)], ub[u:u + len(K)], integ[u:u + len(K)] = Pm, 1, 1
     for k, s in enumerate(sites):
         d = v["sites"][s]
@@ -111,10 +105,10 @@ def rows(c, v, fixed=None, loss=False):
             lb[sh + k] = ub[sh + k] = fixed[s]["h"]
     co = v["cost"]
     ex, w0, w1 = tariff(co)
-    cost[x0:x0 + n] = co["F"] + co["deadhead"] * m["km0"] + ex * co["depot_energy"] * s0B / eta
+    cost[x0:x0 + n] = co["F"] + co["deadhead"] * m["km0"]
     cost[x1:x1 + n] = co["deadhead"] * m["km1"]
-    cost[xc:xc + len(P)] = co["deadhead"] * np.array(m["km_ij"])
-    cost[z:z + n] = -ex * co["depot_energy"] / eta
+    cost[xc:xc + len(P)] = co["deadhead"] * m["km_ij"]
+    cost[r:r + n] = ex * co["depot_energy"] / eta
     cost[p:p + len(K)] = ex * co["energy"] * h / eta
     alpha = v["charger"].get("alpha", 0.0)
     gbar = Pm / eta + alpha * Pm ** 2
@@ -149,8 +143,9 @@ def rows(c, v, fixed=None, loss=False):
         e = kappa * m["km1"][i]
         M = top + e
         R.add([y + i, x1 + i], [1.0, -M], lo=E[i] + e + rB - M)
-        R.add([z + i, y + i, x1 + i], [1.0, -1.0, M], hi=M - E[i] - e)
-        R.add([z + i, x1 + i], [1.0, -top], hi=0)
+        Mr = s0B + e                                    # r_i + y_i >= s0B + E_i + e_i0
+        R.add([r + i, y + i, x1 + i], [1.0, 1.0, -Mr], lo=s0B + E[i] + e - Mr)
+        R.add([r + i, x1 + i], [1.0, -(s0B - rB)], hi=0)
     pk = {jt: k for k, jt in enumerate(K)}
     for j in range(n):                                                  # y_j = a_j + h sum p
         ks = [p + pk[j, t] for t in win.get(j, [])]
@@ -165,17 +160,23 @@ def rows(c, v, fixed=None, loss=False):
     by = {}
     for (j, t), k in pk.items():
         by.setdefault((m["site"][m["T"][j]["first"]], t), []).append(k)
-    for (s, t), ks in sorted(by.items()):                               # (5), (6)
+    for (s, t), ks in sorted(by.items()):                               # (5), (6) per slot
         q = sites.index(s)
-        d = v["sites"][s]
+        Ls = v["sites"][s]["L"]
+        base = ([so + q], [Ls]) if Ls else ([], [])
         R.add([*[u + k for k in ks], sn + q], [1.0] * len(ks) + [-1.0], hi=0)
         gk, w = ([g + k for k in ks], 1.0) if loss else ([p + k for k in ks], 1 / eta)
-        R.add([*gk, sh + q], [w] * len(ks) + [-1.0], hi=d["G0"] - d["L"])
-        if w0 <= t * dt % 86400 < w1:                                   # billing window
-            R.add([*gk, sd + q], [w] * len(ks) + [-1.0], hi=-d["L"])
+        R.add([*gk, *base[0], sh + q], [w] * len(ks) + base[1] + [-1.0],
+              hi=v["sites"][s]["G0"])
+        if billed(t * dt, w0, w1):                                      # billing window
+            R.add([*gk, *base[0], sd + q], [w] * len(ks) + base[1] + [-1.0], hi=0)
     for q, s in enumerate(sites):
-        R.add([sn + q, so + q], [1.0, -v["sites"][s]["nbar"]], hi=0)
-        R.add([sh + q, so + q], [1.0, -v["sites"][s]["hbar"]], hi=0)
+        d = v["sites"][s]
+        R.add([sn + q, so + q], [1.0, -d["nbar"]], hi=0)
+        R.add([sh + q, so + q], [1.0, -d["hbar"]], hi=0)
+        if d["L"]:                                                      # (6) per site
+            R.add([so + q, sh + q], [d["L"], -1.0], hi=d["G0"])
+            R.add([so + q, sd + q], [d["L"], -1.0], hi=0)
     pairs = []
     if loss:
         B = m["B"]
@@ -187,6 +188,13 @@ def rows(c, v, fixed=None, loss=False):
             pairs.append((p + k, g + k))
     return dict(c=cost, R=R, lb=lb, ub=ub, integ=integ, idx=idx, size=size, K=K, inst=m,
                 loss=pairs, alpha=alpha, eta=eta, h=h)
+
+
+def linear(M):
+    """M's linear rows as a LinearConstraint, built once and kept in M."""
+    if "A" not in M:
+        M["A"] = M["R"].constraint(len(M["c"]))
+    return M["A"]
 
 
 def priority(M):
@@ -220,10 +228,12 @@ def solution(M, v, x):
     return duties, plan, infra
 
 
-def m1(c, v, name="corridor", fixed=None, time_limit=600.0, gap=1e-6, keep_x=False):
-    """M1 by HiGHS; U is the cost of the returned schedule as recomputed by the replay.
-    keep_x adds the solution vector, for the fixed-integer subproblems of Phase 8."""
-    M = rows(c, v, fixed)
+def m1(c, v, name="corridor", fixed=None, time_limit=600.0, gap=1e-6, keep_x=False, inst=None):
+    """M1 by HiGHS; U is the cost of the returned schedule as recomputed by the replay, which
+    must agree with the model's objective. keep_x adds the solution vector, for the
+    fixed-integer subproblems of Phase 8."""
+    m = inst if inst is not None else compile(c, v)
+    M = rows(c, v, fixed, inst=m)
     t0 = time.perf_counter()
     res, dt = solve(M["c"], M["R"], M["lb"], M["ub"], M["integ"], time_limit, gap)
     s = status(res)
@@ -234,13 +244,17 @@ def m1(c, v, name="corridor", fixed=None, time_limit=600.0, gap=1e-6, keep_x=Fal
     U = rp["cost"] if rp and rp["ok"] else None
     L = getattr(res, "mip_dual_bound", None) if s in ("optimal", "feasible_limit") else None
     return record("M1", name, s, U=U, L=L,
+                  validation="replayed" if U is not None else
+                  "validation_failed" if rp else "not_available",
+                  objective=None if res.x is None else float(res.fun), bound_source="highs_dual",
                   solver=dict(code=int(res.status), message=res.message), elapsed=dt,
                   provenance=provenance(dict(name=name, sha256=c.get("source", {}).get("sha256")),
-                                        fixed=fixed, time_limit=time_limit, mip_rel_gap=gap),
-                  objective=None if res.x is None else float(res.fun),
+                                        fixed=fixed, time_limit=time_limit, mip_rel_gap=gap,
+                                        formulation=VERSION, corridor=m["corridor"],
+                                        scenario=m["scenario"]),
                   fleet=None if duties is None else len(duties), duties=duties, plan=plan,
                   infra=infra, replay=None if rp is None else {k: rp[k] for k in (
-                      "ok", "defects", "cost", "parts")},
+                      "ok", "defects", "cost", "parts", "recovery")},
                   variables=len(M["c"]), rows=len(M["R"].lo), wall=time.perf_counter() - t0,
                   nodes=getattr(res, "mip_node_count", None),
                   **({"x": None if res.x is None else res.x.tolist()} if keep_x else {}))

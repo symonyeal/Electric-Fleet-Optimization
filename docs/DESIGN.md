@@ -160,7 +160,9 @@ routing results are stated in its units, never converted to money.
 
 In a single-day experiment, capacity costs and peak-demand prices are explicit
 scenario weights in currency per modeled horizon. A monthly demand charge must
-not be divided by 30 and called the actual bill. Actual tariff studies require
+not be divided by 30, or by 365/12, and called the actual bill. The Route 100
+tariff scenarios do divide it by 365/12, and report the result as a normalized
+daily sensitivity weight, never as a utility cost ([Data](DATA.md) §3). Actual tariff studies require
 the billing period, historical peak or ratchet where applicable, and a common
 peak variable across all modeled days. Likewise, annualized capital costs must
 be reconciled with the number and weights of represented days.
@@ -170,14 +172,21 @@ capital once and daily operating cost as sum_d w_d C_d. Billing peaks remain
 monthly maxima, not weighted average daily peaks. Report sensitivity instead of
 an investment recommendation when input costs are illustrative.
 
-**8. Software architecture to implement later**
+**8. Software architecture**
 
-The following is a proposed layout; these source modules do not exist yet.
+The layout as implemented. Two modules were added to the proposal: `models/milp.py` and
+`models/transit.py` hold the plumbing and the compiled transit instance that formulations
+share, so route and transit formulations depend on them and not on each other; `bench/`
+splits the experiment matrix into case execution, the bundle schema and its check, verdicts,
+reports and figures.
 
 ```text
 data/evrp.py          Read .evrp files by keyword; check counts and provenance
 data/gtfs.py          Read calendars, trips, stops, and shapes
-data/network.py       Construct and prune the finite time-space graph
+data/scenario.py      Read declared scenarios; refuse values outside their domains
+models/milp.py        Sparse rows, the HiGHS call and its status names (no model)
+models/transit.py     The compiled transit instance: compatibility graph, distances,
+                      energies, windows, input digests
 models/paths.py       Station graph, shortest interiors, Pareto station paths
 models/route.py       R0, R1, R1-TR rows, bounds, and objective
 models/colgen.py      R2 master, labeling pricing, bound (R2.2)
@@ -193,10 +202,12 @@ methods/oa.py         Convex outer approximation
 checks/route.py       Independent EVRP replay: coverage, load, battery, stations
 checks/schedule.py    Independent paths, service coverage, energy, and plug checks
 checks/enum.py        Brute-force enumeration for tiny instances
-checks/certificate.py Residuals, primal-dual bounds, and result classification
+checks/enum_transit.py Enumeration of tiny one-site M1 timetables
+checks/certificate.py The result contract: solver, validation, certificate, public status
+bench/                Cases, bundle schema and check, verdicts, report, figures, OA grid
 tests/                Analytical, enumeration, derivative, and integration checks
 run_case.py           One instance, one model, one result bundle
-run_bench.py          Reproduce a declared experiment matrix
+run_bench.py          Reproduce a declared experiment matrix, fail-closed
 ```
 
 Use functions and simple immutable records only when they hold a mathematical

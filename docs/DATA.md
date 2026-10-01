@@ -113,27 +113,41 @@ word `illustrative`.
 Results computed from `illustrative` values are reported as sensitivity, never as
 a recommendation ([Design](DESIGN.md) §7).
 
+`data/scenario.py` refuses a scenario outside the domains the models assume, before any row is
+built: every number finite; delta, window, speeds, B, P > 0; 0 < eta <= 1;
+0 <= reserve <= s0 <= smax <= 1; kappa, alpha, gamma, layover >= 0; every cost coefficient
+>= 0 except the rider (> -1); the billing window given whole, with 0 <= `peak_from` < 24,
+0 < `peak_to` <= 24 and `peak_from` != `peak_to` (`peak_from` > `peak_to` wraps across
+midnight); per site, nbar a finite nonnegative integer, hbar, G0 and L finite and >= 0, and
+each stop owned by one site. M4's weights must be finite, nonnegative and sum to one
+(`tests/test_scenario.py`).
+
 *Route 100 on sourced parameters.* `data/scenarios/route100-rs1640.toml` and
 `route100-rs1650.toml` replace every value a primary source supports; the rest stay
-`illustrative`. `route100.toml` is unchanged, so every earlier result still reproduces.
+`illustrative`. `route100.toml` is unchanged. Results from these files are sensitivity
+results under a one-day model, not a modeled utility bill and not a reconstruction of
+TransLink's operation.
 
 | Value | Sourced | Source ([Sources](SOURCES.md) §4) |
 | --- | --- | --- |
 | Battery B | 594 kWh | Nova Bus, LFSe+ total capacity. Unresolved: other sources give 564 kWh, and TransLink quotes "over 150 km" per charge, which at 594 kWh would mean about 3.8 kWh/km |
-| Battery B, `-range` files | 285.8 kWh | Derived: the smallest pack for which TransLink's "over 150 km" holds, 150 km x kappa / (smax - reserve). With 594 kWh a 300 s probe already found a replayed full-day schedule on 16 buses with no on-route charging, which TransLink does not run; the pair brackets the pack |
+| Battery B, `-stress` files | 285.8 kWh | A derived stress case, not evidence of the installed pack: 150 km x kappa / (smax - reserve), the pack that would just give TransLink's "over 150 km" at the assumed consumption, reserve and ceiling. It is conditional on those three assumptions and does not form an empirical bracket with 594 kWh. It exists because with 594 kWh a 300 s probe found a replayed full-day schedule on 16 buses with no on-route charging, which leaves the tariff comparison empty |
 | Consumption kappa | 1.429 kWh/km | CARB 2018, Altoona Arterial cycle (27 mph). Route 100 averages about 19 mph, between the CBD cycle (1.118 kWh/km) and this one; the higher value is taken |
 | Charging efficiency eta | 0.90 | CARB 2018, Foothill Transit's on-route charging over a year of utility bills; Altoona measured 0.76-0.91 |
-| Plugs per loop nbar | 5 | TransLink's 10 on-route overhead chargers (June 2025); the even split is an inference |
+| Plugs per loop nbar | 5 | `illustrative`. TransLink's 10 on-route overhead chargers (June 2025) are a system-wide count: the source does not place five at each Route 100 loop, nor establish that all 19 buses run this corridor. These figures are context for a reader, never validation or calibration |
 | Energy, on route | 8.38 or 11.37 c/kWh | BC Hydro RS 1640 or RS 1650 |
-| Energy, depot | 8.38 c/kWh | RS 1640 in both files: the depot charges 22:00-06:00, outside RS 1640's demand window, so it bears no demand charge |
-| Demand | $13.83 or $2.31 per kW per billing period | RS 1640 (billing demand 06:00-22:00 only) or RS 1650 (whole period), spread over 365/12 days |
+| Energy, depot | 8.38 c/kWh | RS 1640 in both files, on the assumption that the depot charges 22:00-06:00, outside RS 1640's demand window. The model does not enforce that window, depot charging capacity or the minimum demand provisions: the depot term is an external energy price ([Models](MODELS.md) §3a) |
+| Demand | $13.83 or $2.31 per kW per billing period | RS 1640 (billing demand 06:00-22:00 only) or RS 1650 (whole period). M1 models one day, so the charge enters x 12/365 = 0.4547 or 0.0759 CAD/kW/day: a normalized daily sensitivity weight on the day's peak, not a bill. A bill needs the billing month, a peak shared by all its days, and the minimum and ratchet provisions ([Design](DESIGN.md) §7) |
 | Basic charge | 29.99 c/day per metered site | RS 1640, RS 1650 |
 | Riders | -1.5% | RS 1901 "(1.5)%" read as a credit; RS 1904 0% |
 | Charger power P, depot location, operating band (s0, reserve, smax), deadhead speed, capital and operating costs | - | Not found; `illustrative` |
 
 Model terms the tariff adds, in `models/fleet.py`, `models/taper.py` and, written separately,
 `checks/schedule.py` and `checks/enum_transit.py`: the peak is taken over the slots of
-[`peak_from`, `peak_to`) hours of the day only; `rider` multiplies every electricity charge;
-`basic` is charged per open site. A scenario without these keys prices as before. Not
-modeled: the monthly minimum charge (50% of the highest winter demand charge), the discounts
-for primary-voltage metering or customer transformation, and taxes.
+[`peak_from`, `peak_to`) hours of the day only, wrapping across midnight when `peak_from` >
+`peak_to`; `rider` multiplies every electricity charge; `basic` is charged per open site,
+whose meter also carries its base load L ([Models](MODELS.md) §3). A scenario without these
+keys prices as before. Not modeled: the billing month and its shared peak, the monthly
+minimum charge (50% of the highest winter demand charge), the discounts for primary-voltage
+metering or customer transformation, depot charging, and taxes. Phase 12's four full-day runs
+remain open and are run only under this reading.

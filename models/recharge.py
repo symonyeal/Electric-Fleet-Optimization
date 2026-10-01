@@ -25,11 +25,14 @@ import scipy.sparse as sp
 
 from checks.certificate import provenance, record
 from checks.route import replay_charge
+from data.scenario import validate
 from methods.branch import split
 from methods.ipm import ipm, standard
 from methods.oa import oa
-from models.route import Rows
+from models.milp import Rows
 import itertools
+
+VERSION = "R3/1"
 
 
 def arcs(p):
@@ -46,6 +49,7 @@ def arcs(p):
 
 
 def rows(p, sc):
+    validate(sc)
     o, I, b, C, Q, h, D = p["depot"], p["I"], p["b"], p["C"], p["Q"], p["h"], p["D"]
     t, ch, co = sc["time"], sc["charger"], sc["cost"]
     v, sig, T, tmin, P = t["speed"], t["service"], t["T"], t["tau_min"], ch["P"]
@@ -269,9 +273,12 @@ def r3(p, sc, name=None, max_iter=50, time_limit=3600.0, master_limit=600.0, kee
     if r["v"] is not None:
         routes, charges = routes_of(p, M, r["v"])
     return record("R3", name or p["name"], r["status"], U=r["U"], L=r["L"],
+                  bound_source="oa_master_dual",
                   solver=dict(code=None, message=f"outer approximation, "
                               f"{len(r['iterations'])} iterations"), elapsed=r["elapsed"],
-                  provenance=provenance(p, max_iter=max_iter), iterations=r["iterations"],
+                  provenance=provenance(p, max_iter=max_iter, time_limit=time_limit,
+                                        master_limit=master_limit, formulation=VERSION),
+                  iterations=r["iterations"],
                   routes=routes, charges=None if charges is None else
                   {f"{a}:{b}": qt for (a, b), qt in charges.items()}, arcs=len(M["A"]),
                   **({"x": None if r["v"] is None else r["v"].tolist()} if keep_x else {}))

@@ -14,48 +14,15 @@ valid lower bound on y_i, which tightens (R1.6). R0 keeps only direct arcs and d
 """
 
 import math
-import time
 
 import numpy as np
-import scipy.sparse as sp
-from scipy.optimize import Bounds, LinearConstraint, milp
 
 from checks.certificate import provenance, record
 from checks.route import replay
+from models.milp import Rows, solve, status
 from models.paths import paths
 
-HIGHS = {0: "optimal", 1: "feasible_limit", 2: "infeasible", 3: "unbounded", 4: "numerical"}
-
-
-class Rows:
-    """Sparse rows lo <= A v <= hi, accumulated one at a time."""
-
-    def __init__(self):
-        self.r, self.c, self.v, self.lo, self.hi = [], [], [], [], []
-
-    def add(self, cols, vals, lo=-np.inf, hi=np.inf):
-        k = len(self.lo)
-        self.r += [k] * len(cols)
-        self.c += list(cols)
-        self.v += list(vals)
-        self.lo.append(lo)
-        self.hi.append(hi)
-
-    def constraint(self, n):
-        A = sp.csr_array((self.v, (self.r, self.c)), shape=(len(self.lo), n))
-        return LinearConstraint(A, self.lo, self.hi)
-
-
-def solve(c, rows, lb, ub, integ, time_limit, gap):
-    t = time.perf_counter()
-    res = milp(c, constraints=rows.constraint(len(c)), integrality=integ, bounds=Bounds(lb, ub),
-               options=dict(time_limit=time_limit, mip_rel_gap=gap, disp=False))
-    return res, time.perf_counter() - t
-
-
-def status(res):
-    s = HIGHS.get(res.status, "numerical")
-    return "no_incumbent" if s == "feasible_limit" and res.x is None else s
+VERSION = {"R0": "R0/1", "R1": "R1/1", "R1-TR": "R1-TR/1"}
 
 
 def chain(o, arcs, x):
@@ -140,7 +107,8 @@ def r1(p, battery=True, time_limit=600.0, gap=1e-7):
     if M["cut"]:
         return record(name, p["name"], "infeasible", solver=dict(
             code=None, message=f"customers {M['cut']} have no admissible path in or out"),
-            elapsed=0.0, provenance=provenance(p), routes=None, paths=len(M["arcs"]))
+            elapsed=0.0, provenance=provenance(p, formulation=VERSION[name]), routes=None,
+            paths=len(M["arcs"]))
     res, dt = solve(M["c"], M["R"], M["lb"], M["ub"], M["integ"], time_limit, gap)
     s = status(res)
     routes = routes_of(p, M, res.x) if res.x is not None else None
@@ -148,12 +116,16 @@ def r1(p, battery=True, time_limit=600.0, gap=1e-7):
     U = rp["length"] if rp and rp["ok"] else None
     L = getattr(res, "mip_dual_bound", None) if s in ("optimal", "feasible_limit") else None
     return record(name, p["name"], s, U=U, L=L,
+                  validation="replayed" if U is not None else
+                  "validation_failed" if rp else "not_available",
+                  objective=None if res.x is None else float(res.fun), bound_source="highs_dual",
                   solver=dict(code=int(res.status), message=res.message), elapsed=dt,
-                  provenance=provenance(p, time_limit=time_limit, mip_rel_gap=gap),
+                  provenance=provenance(p, time_limit=time_limit, mip_rel_gap=gap,
+                                        formulation=VERSION[name]),
                   routes=routes,
                   replay=None if rp is None else dict(ok=rp["ok"], defects=rp["defects"]),
-                  objective=None if res.x is None else float(res.fun), paths=len(M["arcs"]),
-                  rows=len(M["R"].lo), nodes=getattr(res, "mip_node_count", None))
+                  paths=len(M["arcs"]), rows=len(M["R"].lo),
+                  nodes=getattr(res, "mip_node_count", None))
 
 
 def r0(p, **kw):
@@ -224,8 +196,12 @@ def r1tr(p, beta=None, time_limit=600.0, gap=1e-7):
     U = rp["length"] if rp and rp["ok"] else None
     L = getattr(res, "mip_dual_bound", None) if s in ("optimal", "feasible_limit") else None
     return record("R1-TR", p["name"], s, U=U, L=L,
+                  validation="replayed" if U is not None else
+                  "validation_failed" if rp else "not_available",
+                  objective=None if res.x is None else float(res.fun), bound_source="highs_dual",
                   solver=dict(code=int(res.status), message=res.message), elapsed=dt,
-                  provenance=provenance(p, beta=beta, time_limit=time_limit, mip_rel_gap=gap),
+                  provenance=provenance(p, beta=beta, time_limit=time_limit, mip_rel_gap=gap,
+                                        formulation=VERSION["R1-TR"]),
                   routes=routes,
                   replay=None if rp is None else dict(ok=rp["ok"], defects=rp["defects"]),
-                  objective=None if res.x is None else float(res.fun), arcs=N)
+                  arcs=N)

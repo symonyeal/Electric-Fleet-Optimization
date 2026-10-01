@@ -6,7 +6,8 @@ The checkout must be at commit 16d3499. Its requirements pin numpy 1.24, which c
 on Python 3.14, so it runs against the installed numpy; loguru, matplotlib and pandas, which it
 imports but does not need for solving, are replaced by inert modules. Each run's printed tours
 are converted to the exchange format and replayed by checks.route; the replayed length, not
-GSGA's own fitness, is the result.
+GSGA's own fitness, is the result. A replayed route set certifies its own length, so these
+bundles supply upper bounds whatever their provenance; they never supply a lower bound.
 """
 
 import argparse
@@ -21,10 +22,11 @@ from pathlib import Path
 
 import numpy as np
 
+from bench import schema
 from checks.certificate import REVISION, provenance
 from checks.route import from_evrp_python, replay
 from data.evrp import COMMIT, FETCHED, load
-from run_case import key, save
+from run_case import key
 
 
 class Inert:
@@ -82,7 +84,10 @@ def main():
                  replay=dict(ok=rp["ok"], defects=rp["defects"], routes=rp["routes"]),
                  routes=routes, elapsed=dt, provenance=dict(provenance(p), evrp_python=COMMIT,
                                                             revision=REVISION))
-        save(r, Path(x.out) / f"{p['name']}-GSGA-seed{s}")
+        r["bundle"] = dict(schema=schema.SCHEMA, code=schema.identity(), command=sys.argv,
+                           inputs={f"data/fetched/{k}.evrp": p["sha256"]},
+                           artifacts=schema.artifacts(r))
+        schema.write(Path(x.out) / f"{p['name']}-GSGA-seed{s}.json", r, routes=routes)
         print(f"{p['name']} GSGA seed {s}: fitness {r['fitness']:.6f}  replay "
               f"{'ok' if rp['ok'] else rp['defects']}  length {rp['length']:.6f}  {dt:.1f}s")
 
