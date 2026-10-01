@@ -35,6 +35,7 @@ def test_services_apply_calendar_then_exceptions(tmp_path):
 
 
 @pytest.mark.data
+@pytest.mark.gtfs
 def test_route_100_on_2026_10_07():
     T = trips(load(), dt.date(2026, 10, 7), routes={"100"})
     assert len(T) == 219 and len({t["block"] for t in T}) == 23
@@ -42,12 +43,14 @@ def test_route_100_on_2026_10_07():
 
 
 @pytest.mark.data
+@pytest.mark.gtfs
 def test_holiday_runs_sunday_service():
     """30 September 2026 swaps weekday service 1 for Sunday service 3 (166 trips on route 100)."""
     assert len(trips(load(), dt.date(2026, 9, 30), routes={"100"})) == 166
 
 
 @pytest.mark.data
+@pytest.mark.gtfs
 def test_fixture_matches_the_snapshot():
     with open(FIX, encoding="utf-8") as f:
         c = json.load(f)

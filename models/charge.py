@@ -5,7 +5,9 @@ With every integer of M1 fixed, what remains is convex:
     M1-Q   min c'v + Delta sum gamma p^2       over M1's rows          (a QP)
     M2     min c'v + Delta sum gamma p^2       over M2's linear rows and
            c_k(v) = p_k/eta + alpha p_k^2 - g_k <= 0                   (a convex QCQP)
-Fixing u_jt = 0 fixes p_jt = g_jt = 0: those faces are removed before any barrier acts.
+Fixing u_jt = 0 fixes p_jt = g_jt = 0: those faces are removed before any barrier acts. The
+rows are built once per run (models/transit.py compiles the instance); a fixed-integer
+subproblem changes only bounds and the nonlinear terms.
 M1-Q is solved by methods/ipm.py and, independently, by trust-constr. M2 is solved by the
 textbook barrier method for convex programs (methods/ipm.py with h; Vanderbei Ch. 25) and,
 independently, by trust-constr; the two agree to 1e-6 on the tests. Bounds are (A5): any
@@ -27,8 +29,11 @@ from checks.schedule import replay_energy
 from methods.branch import split
 from methods.ipm import ipm, standard
 from methods.oa import oa
-from models.fleet import rows, solution
+from models.fleet import linear, rows, solution
+from models.transit import compile
 import itertools
+
+VERSION = "M2/2"      # follows M1/2
 
 TC = dict(initial_barrier_parameter=1e-8, initial_barrier_tolerance=1e-8, barrier_tol=1e-10,
           gtol=1e-10, xtol=1e-14, maxiter=5000)          # docs/TOOLCHAIN.md
@@ -44,15 +49,18 @@ def lift(Ma, Mb, x):
 
 
 def fixed_box(M, x):
-    """Bounds with every integer fixed at round(x), and p = g = 0 where u = 0."""
+    """Bounds with every integer fixed at round(x), p = g = 0 where u = 0, and the restoration
+    r_i = 0 where trip i is not a pull-in: zero directions leave the box, so no barrier acts on
+    a face without interior (Models §6)."""
     lb, ub = M["lb"].copy(), M["ub"].copy()
     J = np.flatnonzero(M["integ"])
     lb[J] = ub[J] = np.round(x[J])
-    i, K = M["idx"], len(M["K"])
+    i, K, n = M["idx"], len(M["K"]), M["size"]["r"]
     off = np.flatnonzero(lb[i["u"]:i["u"] + K] == 0)
     ub[i["p"] + off] = 0.0
     if "g" in i:
         ub[i["g"] + off] = 0.0
+    ub[i["r"] + np.flatnonzero(lb[i["x1"]:i["x1"] + n] == 0)] = 0.0
     return lb, ub
 
 
@@ -65,7 +73,7 @@ def stress(M, v):
 
 def reduce(M, lb, ub):
     """Rows restricted to the free variables, with the fixed ones moved to the bounds."""
-    A = M["R"].constraint(len(M["c"]))
+    A = linear(M)
     F = np.flatnonzero(lb < ub)
     Z = np.flatnonzero(lb == ub)
     s = A.A[:, Z] @ lb[Z]
@@ -74,12 +82,13 @@ def reduce(M, lb, ub):
     return F, Z, Af[keep], A.lb[keep] - s[keep], A.ub[keep] - s[keep]
 
 
-def m1q_fixed(c, v, x, fixed=None):
-    """M1-Q at fixed integers: methods/ipm.py (QP), trust-constr independently, bound (A5)."""
-    M = rows(c, v, fixed)
+def m1q_fixed(c, v, x, fixed=None, M=None):
+    """M1-Q at fixed integers: methods/ipm.py (QP), trust-constr independently, bound (A5).
+    M is M1's rows of (c, v, fixed), built here if absent."""
+    M = M or rows(c, v, fixed)
     lb, ub = fixed_box(M, x)
     N, q = len(M["c"]), stress(M, v)
-    A = M["R"].constraint(N)
+    A = linear(M)
     S = standard(M["c"], *split(A.A, A.lb, A.ub), lb, ub)
     Q = sp.diags_array(np.r_[q, np.zeros(len(S[0]) - N)])
     r = ipm(*S, Q=Q)
@@ -94,10 +103,11 @@ def m1q_fixed(c, v, x, fixed=None):
                 independent_status=t.status, x=r["x"][:N], kkt=r["err"])
 
 
-def problem(c, v, x, fixed=None):
-    """M2 at fixed integers as functions of the free variables (for trust-constr and checks)."""
-    M1 = rows(c, v, fixed)
-    M = rows(c, v, fixed, loss=True)
+def problem(c, v, x, fixed=None, M=None, M1=None):
+    """M2 at fixed integers as functions of the free variables (for trust-constr and checks);
+    M and M1 are M2's and M1's rows, built here if absent."""
+    M = M or rows(c, v, fixed, loss=True)
+    M1 = M1 or rows(c, v, fixed, inst=M["inst"])
     x2 = lift(M1, M, x)
     lb, ub = fixed_box(M, x2)
     F, Z, Af, lo, hi = reduce(M, lb, ub)
@@ -133,15 +143,16 @@ def problem(c, v, x, fixed=None):
                 cf=cf, qf=qf)
 
 
-def m2_fixed(c, v, x, fixed=None, form="m1"):
+def m2_fixed(c, v, x, fixed=None, form="m1", M=None):
     """M2 at fixed integers by the textbook barrier method for convex programs (methods/ipm.py,
     Vanderbei Ch. 25), with its bound (A5). Loss rows whose p is fixed at 0 are dropped: their
     slack would be forced to 0, where no interior exists. x is an M1 solution (form="m1") or a
-    vector of M2's rows (form="m2", as outer approximation passes)."""
-    M = rows(c, v, fixed, loss=True)
-    lb, ub = fixed_box(M, lift(rows(c, v, fixed), M, x) if form == "m1" else x)
+    vector of M2's rows (form="m2", as outer approximation passes); M is M2's rows, built here
+    if absent, and only its bounds change."""
+    M = M or rows(c, v, fixed, loss=True)
+    lb, ub = fixed_box(M, lift(rows(c, v, fixed, inst=M["inst"]), M, x) if form == "m1" else x)
     N, q = len(M['c']), stress(M, v)
-    A = M['R'].constraint(N)
+    A = linear(M)
     S = standard(M['c'], *split(A.A, A.lb, A.ub), lb, ub)
     Ns = len(S[0])
     pairs = [(a, b) for a, b in M['loss'] if ub[a] > 0]
@@ -172,9 +183,9 @@ def m2_fixed(c, v, x, fixed=None, form="m1"):
                 loss_rows=k)
 
 
-def m2_trust(c, v, x, fixed=None):
+def m2_trust(c, v, x, fixed=None, M=None):
     """The same subproblem by trust-constr, kept as a cross-check (docs/TOOLCHAIN.md)."""
-    d = problem(c, v, x, fixed)
+    d = problem(c, v, x, fixed, M=M)
     lb, ub = d['lb'][d['F']], d['ub'][d['F']]
     cons = [LinearConstraint(d['Af'], d['lo'], d['hi'])]
     if len(d['P']):
@@ -245,8 +256,8 @@ def loss_cons(M):
 def m2(c, v, name="corridor", fixed=None, max_iter=50, time_limit=3600.0, master_limit=600.0):
     """M2 by outer approximation; U is the cost of a schedule replayed with losses and taper."""
     v0 = loss_only(v)
-    M = rows(c, v0, fixed, loss=True)
-    A = M["R"].constraint(len(M["c"]))
+    M = rows(c, v0, fixed, loss=True, inst=compile(c, v0))
+    A = linear(M)
     i, K = M["idx"], len(M["K"])
     pts = []
     for r in (0.0, v["charger"]["P"] / 2, v["charger"]["P"]):
@@ -255,7 +266,7 @@ def m2(c, v, name="corridor", fixed=None, max_iter=50, time_limit=3600.0, master
         pts.append(z)
 
     def sub(x):
-        s = m2_fixed(c, v0, x, fixed, form="m2")
+        s = m2_fixed(c, v0, x, fixed, form="m2", M=M)
         return (s["status"], s["w"], s["f"]) if s["status"] == "optimal" else (s["status"], None,
                                                                               None)
 
@@ -269,12 +280,16 @@ def m2(c, v, name="corridor", fixed=None, max_iter=50, time_limit=3600.0, master
     duties = plan = infra = None
     if r["v"] is not None:
         duties, plan, infra = solution(M, v0, r["v"])
-    return record("M2", name, r["status"] if r["status"] != "stall" else "stall", U=r["U"],
-                  L=r["L"], solver=dict(code=None, message=f"outer approximation, "
-                                        f"{len(r['iterations'])} iterations"),
+    return record("M2", name, r["status"], U=r["U"], L=r["L"],
+                  bound_source="oa_master_dual",
+                  solver=dict(code=None, message=f"outer approximation, "
+                              f"{len(r['iterations'])} iterations"),
                   elapsed=r["elapsed"], provenance=provenance(
                       dict(name=name, sha256=c.get("source", {}).get("sha256")), fixed=fixed,
-                      gamma=0.0, max_iter=max_iter), iterations=r["iterations"],
+                      gamma=0.0, max_iter=max_iter, time_limit=time_limit,
+                      master_limit=master_limit, formulation=VERSION,
+                      corridor=M["inst"]["corridor"], scenario=M["inst"]["scenario"]),
+                  iterations=r["iterations"],
                   cuts=r["cuts"], fleet=None if duties is None else len(duties), duties=duties,
                   plan=plan, infra=infra)
 
@@ -286,7 +301,7 @@ def m2p(c, v, J=8, fixed=None, time_limit=600.0):
     v0 = loss_only(v)
     M = rows(c, v0, fixed, loss=True)
     N, eta, alpha, P = len(M["c"]), M["eta"], M["alpha"], v["charger"]["P"]
-    A = M["R"].constraint(N)
+    A = linear(M)
     r = np.linspace(0.0, P, J + 1)
     out = {}
     for side, pieces in (("lower", [(1 / eta + 2 * alpha * s, alpha * s * s) for s in r]),

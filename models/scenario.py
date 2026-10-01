@@ -17,8 +17,11 @@ from scipy.optimize import Bounds, LinearConstraint, milp
 
 from checks.certificate import provenance, record
 from checks.schedule import replay_energy
+from data.scenario import weights
 from models.fleet import rows, solution
-from models.route import status
+from models.milp import status
+
+VERSION = "M4/2"      # follows M1/2
 
 COMMON = ("x0", "x1", "xc", "o", "n", "h")
 
@@ -69,7 +72,9 @@ def join(c, v, scenarios, fixed=None, worst=False):
 
 def m4(c, v, scenarios, name="corridor", fixed=None, worst=False, time_limit=600.0, gap=1e-6):
     """M4 by HiGHS; every scenario's plan is replayed with its own consumption, and U is the
-    replayed expected (or worst) cost."""
+    replayed expected (or worst) cost. The weights are checked before any row is built: finite,
+    nonnegative and summing to one."""
+    weights(scenarios)
     J = join(c, v, scenarios, fixed, worst)
     t0 = time.perf_counter()
     res = milp(J["c"], constraints=LinearConstraint(J["A"], J["lo"], J["hi"]),
@@ -88,8 +93,13 @@ def m4(c, v, scenarios, name="corridor", fixed=None, worst=False, time_limit=600
         if all(p_["ok"] for p_ in per):
             U = max(costs) if worst else float(np.dot([pw for pw, _ in scenarios], costs))
     L = getattr(res, "mip_dual_bound", None) if st in ("optimal", "feasible_limit") else None
-    return record("M4", name, st, U=U, L=L, solver=dict(code=int(res.status),
-                  message=res.message), elapsed=time.perf_counter() - t0,
+    return record("M4", name, st, U=U, L=L,
+                  validation="replayed" if U is not None else
+                  "validation_failed" if per else "not_available",
+                  objective=None if res.x is None else float(res.fun), bound_source="highs_dual",
+                  solver=dict(code=int(res.status), message=res.message),
+                  elapsed=time.perf_counter() - t0,
                   provenance=provenance(dict(name=name, sha256=c.get("source", {}).get(
-                      "sha256")), scenarios=scenarios, worst=worst, fixed=fixed),
-                  objective=None if res.x is None else float(res.fun), scenarios=per)
+                      "sha256")), scenarios=scenarios, worst=worst, fixed=fixed,
+                      time_limit=time_limit, mip_rel_gap=gap, formulation=VERSION),
+                  scenarios=per)

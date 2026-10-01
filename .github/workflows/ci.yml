@@ -19,3 +19,17 @@ jobs:
       - run: python -m pytest -q -m "not data and not slow"
       - run: python -m ruff check .
       - run: python -m pip check
+
+  pinned-data:
+    # The EVRP benchmark is fetched from evrp-python at commit 16d3499 and checked against
+    # data/evrp.sha256. The GTFS snapshot is not refetchable (Data §2): its tests run locally.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -r requirements.txt
+      - run: python -c "from data.evrp import KEYS, fetch; fetch(KEYS)"
+      - run: python -m pytest -q -m "data and not gtfs and not slow"

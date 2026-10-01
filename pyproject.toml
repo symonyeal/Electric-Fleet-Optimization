@@ -4,6 +4,7 @@ testpaths = ["tests"]
 addopts = "-p no:cacheprovider"
 markers = [
     "data: needs the fetched EVRP or GTFS files",
+    "gtfs: needs the pinned GTFS snapshot, which cannot be fetched again (Data §2)",
     "slow: solves a benchmark instance to a certificate or a limit",
 ]
 

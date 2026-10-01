@@ -16,6 +16,15 @@ The computational study has two tracks sharing the same physical models.
 | Convex MINLP | MILP outer approximation plus barrier NLP/QP subproblems | Main M2 and R3 method |
 | Nonconvex extension | Fixed-schedule `trust-constr`, multiple starts | M3 feasible incumbents and local diagnostics |
 
+The textbook IPM, the educational tree and OA's barrier subproblems are this project's own
+implementations. Their results support a published certificate only through the contract of
+§8: a bound is admitted only from a trusted source (HiGHS's MIP dual bound, (R2.2) after exact
+pricing, the OA master's dual bound, the M0 matching), and a solution only through the
+independent replay. The tree's (A3) node bounds never enter a published verdict
+(`bench/verdict.py`). No conic or convex solver was added: adopting one (an established
+interior-point conic code, for instance) first requires citing its formulation and
+implementation in [Sources](SOURCES.md) and measuring it here; neither has been done.
+
 The design does not assume that selecting an IPM for an LP selects it for all
 HiGHS MIP nodes. SciPy's MILP interface is not an IPM branch-and-bound interface.
 The educational tree explicitly controls its LP node solver. Benchmark it against
@@ -157,21 +166,37 @@ x_j <= floor(x_j*) and x_j >= ceil(x_j*). Use a deterministic most-fractional
 rule first, with lexicographic tie breaking. A feasible M1 schedule initializes
 the incumbent U; otherwise U is infinite.
 
-    Input:          bounded MILP; LP method; eps_abs, eps_rel; node/time limits
+    Input:          bounded MILP; LP method; eps_abs, eps_rel, tol_int; node/time limits
     Initialization: root node; U from a independently checked feasible schedule
     General step:   (a) select an open node and solve its LP relaxation
                     (b) retain a valid lower bound for that node
                     (c) prune only for certified infeasibility or bound >= U-tol
-                    (d) if the discrete point is integral, fix integers and
-                        re-solve continuous variables; validate before updating U
-                    (e) otherwise create the two branches
-                    (f) stop at a global bound gap or resource limit
+                    (d) if every fraction is within tol_int, re-solve an early-stopped
+                        node exactly, fix integers at their rounded values and
+                        re-solve the continuous variables; the node is solved only if
+                        that point passes the independent check, its value agrees with
+                        c'v, and it meets the node bound
+                    (e) an unsolved integral-looking node branches on its most
+                        fractional variable, however small the fraction; if every
+                        value is exactly integral, the node keeps its bound as
+                        unresolved
+                    (f) otherwise create the two branches
+                    (g) stop at a global bound gap or resource limit
 
-The global lower bound is the minimum valid bound over all open nodes, capped
-by U once a feasible incumbent exists. Numerical failure leaves a node open
-with its inherited bound. If no usable bound exists, report no gap. An integral
-LP point must still satisfy every original physical row after fixing integers.
-Rounding an LP route is not an incumbent construction.
+The global lower bound is the minimum valid bound over all open and unresolved
+nodes, capped by U once a feasible incumbent exists. Numerical failure leaves a
+node open with its inherited bound. If no usable bound exists, report no gap. A
+rejected candidate never leaves the bound computation: with no incumbent the
+status is `validation_failed` and L is the least retained bound. Rounding an LP
+route is not an incumbent construction.
+
+Rule (d) is the repair of a measured failure (audit of 1 October 2026). For
+min 1e8 x1 + x2 subject to 1e7 x1 + x2 >= 1, x1 - 2 x2 >= -1, x binary, the LP of
+the branch x2 = 0 has x1 = 1e-7, within tol_int = 1e-6. Rounding gave the
+infeasible point (0, 0), and the node was pruned as integral; the tree returned
+`optimal` at 100000001, (1, 1). Enumeration gives 100000000 at (1, 0), which the
+tree now returns after one branching on the hidden fraction
+(`tests/test_regressions.py`).
 
 The tree demonstrates Vanderbei Chapter 23 and BT §11.2. It is not intended to reproduce
 commercial presolve, cutting planes, or advanced branching.
@@ -304,17 +329,46 @@ requirement to reproduce every algorithm in that repository.
 
 **8. Result contract**
 
-Each result distinguishes `optimal`, `feasible_limit`, `infeasible`, `unbounded`,
-`local`, `numerical`, `stall`, and `no_incumbent`. Store the original solver code
-and message as well as the project classification.
+A result keeps apart what each party established (`checks/certificate.py`):
 
-For a minimization problem with valid finite L and U, report
+| Field | Values | Established by |
+| --- | --- | --- |
+| `solver_status` | optimal, feasible_limit, no_incumbent, infeasible, unbounded, local, numerical, stall, limit | the method's own termination: HiGHS, SciPy, the textbook IPM, OA, R2's loop |
+| `validation_status` | replayed, validation_failed, not_available | the independent replay of the returned solution, and the agreement of the model's objective with the replayed cost |
+| `certificate_status` | certified, open, invalid_bound, not_applicable | the gap rule below |
+| `status` | the solver values, invalid_bound, validation_failed | derived; `optimal` if and only if certified |
+
+The solver's code and message are stored beside them. For a minimization problem with valid
+finite L and U,
 
 $$\operatorname{gap}_{abs}=U-L,\qquad
-\operatorname{gap}_{rel}=\frac{U-L}{\max(1,|U|)}.$$
+\operatorname{gap}_{rel}=\frac{U-L}{\max(1,|U|)},\qquad
+\tau=\epsilon_{abs}+\epsilon_{rel}\max(1,|U|).$$
 
-Require U-L <= eps_abs+eps_rel max(1,|U|) for the claimed certificate. A materially
-negative gap is a defect to investigate, not a value to clamp silently. Every
-bound records model, graph, scenario set, time grid, and provenance. M3 local
-stationarity must not populate a field named global optimality gap unless a
-separate valid lower bound is also supplied.
+The certificate is two-sided: certified when -tau <= U - L <= tau and U is replayed;
+`invalid_bound` when L > U + tau. A crossing within tau is floating-point noise, reported raw
+and never clamped; a larger one carries the defect `negative gap` and is never certified, so
+`certified` and a defect never coexist. The same rule (`gap_state`) stops OA, R2 and the tree,
+and decides every published verdict.
+
+A solver's `optimal` becomes the public `optimal` only through the certificate. With a
+replay that fails, the status is `validation_failed`; with no U, `no_incumbent`; with an
+objective that differs from the replayed cost by more than tau, `validation_failed`, U kept
+and L in doubt. Before this contract (revision 098642b and earlier) the rule was one-sided:
+`record(U=100, L=100.5)` returned certified with the defect `negative gap`, and the E-n22-k4
+R2 bundles were stored as `optimal` with a 1.086% gap.
+
+Every bound records model, graph, scenario set, time grid, and provenance. M3 local
+stationarity must not populate a field named global optimality gap unless a separate valid
+lower bound is also supplied.
+
+*Result bundles.* A stored result is the record above with a `bundle` key (schema 2,
+`bench/schema.py`): the case, the formulation version, the full commit, a dirty flag and the
+digest of the executed source, the command, input checksums, the complete scenario and its
+digest, library versions, host, seeds, tolerances, requested and spent time, and digests of
+the routes or schedule. `run_bench.py` admits a bundle only when all of these match the case
+it stands for; a dirty tree cannot write into `docs/results`. Bundles written before the
+schema are legacy: provenance-limited when their revision was dirty, admitted only when
+`docs/results/MIGRATION.json` retains them after a code comparison shows the formulation
+unchanged. An upper bound needs no such provenance: a route set or schedule that the replay
+accepts certifies its own cost.

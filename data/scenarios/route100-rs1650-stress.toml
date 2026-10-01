@@ -1,9 +1,10 @@
-# The same scenario as route100-rs1640.toml with the smallest pack consistent with
-# TransLink's stated range: 150 km at kappa between smax and reserve. 594 kWh (Nova's
-# figure) runs the day without on-route charging, which TransLink does not (Data §3).
-# Route 100 on sourced parameters, every meter on BC Hydro's Overnight Rate (Data §3).
-# A value cites its source in docs/SOURCES.md, or is `illustrative`. Tariff amounts are before
-# taxes and levies, as the tariff states them. route100-rs1650.toml differs only in [cost].
+# A derived stress case, not TransLink's pack: route100-rs1650.toml with the pack that would
+# just give TransLink's "over 150 km" at the assumed kappa, reserve and smax. It is conditional
+# on those assumptions and does not bracket the installed pack with 594 kWh (Data §3).
+# Route 100 on sourced parameters: the on-route chargers on BC Hydro's Demand Transition Rate,
+# the depot on the Overnight Rate, charging 22:00-06:00 (Data §3). A value cites its source in
+# docs/SOURCES.md, or is `illustrative`. Tariff amounts are before taxes and levies, as the
+# tariff states them. route100-rs1640.toml differs only in [cost].
 
 [time]
 delta = {value = 300.0, unit = "s", source = "illustrative"}           # slot length
@@ -19,7 +20,7 @@ lat = {value = 49.2106, unit = "deg", source = "illustrative"}         # not fou
 lon = {value = -123.0770, unit = "deg", source = "illustrative"}
 
 [battery]
-B = {value = 285.8, unit = "kWh", source = "derived: TransLink 'over 150 km' (Buzzer 2023-02-02) x kappa / (smax - reserve)"}
+B = {value = 285.8, unit = "kWh", source = "derived stress case: TransLink 'over 150 km' (Buzzer 2023-02-02) x kappa / (smax - reserve), conditional on the assumed kappa, reserve and smax; not the installed pack"}
 reserve = {value = 0.20, unit = "1", source = "illustrative"}
 smax = {value = 0.95, unit = "1", source = "illustrative"}
 s0 = {value = 0.90, unit = "1", source = "illustrative"}
@@ -34,7 +35,7 @@ gamma = {value = 1.0e-4, unit = "CAD/(kW^2 h)", source = "illustrative"}  # M1-Q
 [sites.marpole]
 name = "Marpole Loop"
 stops = ["745", "12027"]
-nbar = {value = 5.0, unit = "plugs", source = "TransLink 2025-06-27: 10 on-route overhead chargers; 5 per loop is an inference"}
+nbar = {value = 5.0, unit = "plugs", source = "illustrative: TransLink 2025-06-27 counts 10 on-route chargers system-wide; their split between the loops is not published"}
 G0 = {value = 0.0, unit = "kW", source = "illustrative"}
 hbar = {value = 1500.0, unit = "kW", source = "illustrative"}
 L = {value = 0.0, unit = "kW", source = "illustrative"}                 # other load at the site
@@ -42,7 +43,7 @@ L = {value = 0.0, unit = "kW", source = "illustrative"}                 # other 
 [sites.station22]
 name = "22nd Street Station"
 stops = ["5989", "10929"]
-nbar = {value = 5.0, unit = "plugs", source = "TransLink 2025-06-27: 10 on-route overhead chargers; 5 per loop is an inference"}
+nbar = {value = 5.0, unit = "plugs", source = "illustrative: TransLink 2025-06-27 counts 10 on-route chargers system-wide; their split between the loops is not published"}
 G0 = {value = 0.0, unit = "kW", source = "illustrative"}
 hbar = {value = 1500.0, unit = "kW", source = "illustrative"}
 L = {value = 0.0, unit = "kW", source = "illustrative"}
@@ -53,10 +54,8 @@ deadhead = {value = 1.5, unit = "CAD/km", source = "illustrative"}
 site = {value = 300.0, unit = "CAD/day", source = "illustrative"}
 plug = {value = 100.0, unit = "CAD/plug/day", source = "illustrative"}
 upgrade = {value = 0.05, unit = "CAD/kW/day", source = "illustrative"}
-energy = {value = 0.0838, unit = "CAD/kWh", source = "BC Hydro Electric Tariff RS 1640 Rev 13 (2026-04-01): energy 8.38 c/kWh"}
-depot_energy = {value = 0.0838, unit = "CAD/kWh", source = "BC Hydro Electric Tariff RS 1640 Rev 13 (2026-04-01): energy 8.38 c/kWh"}
-peak = {value = 0.454685, unit = "CAD/kW/day", source = "BC Hydro Electric Tariff RS 1640 Rev 13: $13.83/kW per billing period, x 12/365"}
-peak_from = {value = 6.0, unit = "h", source = "BC Hydro Electric Tariff RS 1640 Rev 13: Billing Demand between 06:00 and 22:00"}
-peak_to = {value = 22.0, unit = "h", source = "BC Hydro Electric Tariff RS 1640 Rev 13: Billing Demand between 06:00 and 22:00"}
-basic = {value = 0.2999, unit = "CAD/day/site", source = "BC Hydro Electric Tariff RS 1640 Rev 13: basic 29.99 c/day"}
+energy = {value = 0.1137, unit = "CAD/kWh", source = "BC Hydro Electric Tariff RS 1650 Rev 12 (2026-04-01): energy 11.37 c/kWh (F2027)"}
+depot_energy = {value = 0.0838, unit = "CAD/kWh", source = "BC Hydro Electric Tariff RS 1640 Rev 13 (2026-04-01): energy 8.38 c/kWh; depot charging in 22:00-06:00 is assumed, not modeled"}
+peak = {value = 0.075945, unit = "CAD/kW/day", source = "BC Hydro Electric Tariff RS 1650 Rev 12: $2.31/kW of Billing Demand (F2027) x 12/365, a normalized daily sensitivity weight, not a bill"}
+basic = {value = 0.2999, unit = "CAD/day/site", source = "BC Hydro Electric Tariff RS 1650 Rev 12: basic 29.99 c/day"}
 rider = {value = -0.015, unit = "1", source = "BC Hydro Electric Tariff RS 1901 Rev 13 '(1.5)%' as a credit; RS 1904 Rev 2: 0%"}

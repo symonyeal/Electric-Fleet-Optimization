@@ -8,17 +8,21 @@ of the charging slots are the variables; energies follow by (14) bus by bus. The
 nonconvex (a difference of convex functions, Models (15)), so trust-constr returns local
 solutions: several starts are run and none is labeled global. The fixed-integer M1 LP is a
 valid optimistic bound: an M3 slot adds at most Delta P of energy, and its average grid power is
-below the peak (16) that M3's rows use.
+below the peak (16) that M3's rows use. The cost is M1's: each open site's meter peaks at least
+at its base load L, and the depot restores max(0, s0 B - e) overnight (Models §3).
 """
 
 import numpy as np
 from scipy.integrate import solve_ivp
 from scipy.optimize import Bounds, NonlinearConstraint, linprog, minimize
 
+from data.scenario import billed
 from methods.branch import split
 from models.charge import fixed_box
-from models.fleet import rows, solution, tariff
+from models.fleet import linear, rows, solution, tariff
 import itertools
+
+VERSION = "M3/2"      # follows M1/2
 
 
 def law(e, q, dt, B):
@@ -32,9 +36,10 @@ def integrate(e, q, dt, B):
                      atol=1e-12).y[0, -1]
 
 
-def setup(c, v, x, fixed=None):
-    """The schedule of an M1 solution x, and its charging slots as M3's variables."""
-    M = rows(c, v, fixed)
+def setup(c, v, x, fixed=None, M=None):
+    """The schedule of an M1 solution x, and its charging slots as M3's variables; M is M1's
+    rows of (c, v, fixed), built here if absent."""
+    M = M or rows(c, v, fixed)
     duties, _, infra = solution(M, v, x)
     _, ub = fixed_box(M, x)
     i, K, T = M["idx"], M["K"], M["inst"]["T"]
@@ -74,13 +79,15 @@ def simulate(S, v, qv):
             else:
                 e -= kap * m["km1"][j]
                 cons.append(e - rB)
-                restore += (s0B - e) / eta
+                restore += max(0.0, s0B - e) / eta                 # never sold back
     for (s, _), g in peak.items():                                  # grid (6) at the peak
         cons.append(v["sites"][s]["G0"] + S["infra"][s]["h"] - v["sites"][s]["L"] - g)
+    for s, f in S["infra"].items():                                 # the meter's base load
+        cons.append(v["sites"][s]["G0"] + f["h"] - v["sites"][s]["L"])
     ex, w0, w1 = tariff(co)
-    D = {}
+    D = {s: v["sites"][s]["L"] for s in S["infra"]}
     for (s, t), g in peak.items():
-        if w0 <= t * m["D"] % 86400 < w1:                          # billing window (Data §3)
+        if billed(t * m["D"], w0, w1):                              # billing window (Data §3)
             D[s] = max(D.get(s, 0.0), v["sites"][s]["L"] + g)
     cost = ex * (co["energy"] * energy + co["depot_energy"] * restore
                  + co["peak"] * sum(D.values()))
@@ -105,7 +112,7 @@ def m3_fixed(c, v, x, fixed=None, starts=5, seed=0):
                         + co["upgrade"] * f["h"]
                         for f in S["infra"].values()))
     lb, ub = fixed_box(M, x)
-    A = M["R"].constraint(len(M["c"]))
+    A = linear(M)
     Aub, bub, Aeq, beq = split(A.A, A.lb, A.ub)
     lp = linprog(M["c"], Aub, bub, Aeq, beq, bounds=list(zip(lb, ub)), method="highs-ds")
     g = np.random.default_rng(seed)

@@ -44,9 +44,11 @@ nonnegative, this enforces the reserve conservatively throughout the movement.
 It is not a measured within-trip energy trace. A later profile must preserve the
 same total and be independently checked.
 
-Horizon selection includes the complete selected service day and recovery
-charging. Do not truncate trips after midnight. An isolated extended-horizon
-experiment is not automatically a repeatable 24-hour operating schedule.
+Horizon selection includes the complete selected service day. Do not truncate
+trips after midnight. An isolated extended-horizon experiment is not
+automatically a repeatable 24-hour operating schedule. Overnight recovery
+charging belongs to the horizon of the per-bus design below; the connection form
+as implemented prices it as an external term instead (§3a).
 
 **2. M0: battery-free scheduling**
 
@@ -100,7 +102,7 @@ Decision variables:
 
 Let P_ks be the battery-side power limit, eta_ks in (0,1] the constant conversion
 efficiency, G_s^0 the existing grid capacity, hbar_s the permitted upgrade, L_st
-the exogenous site load, and c_st >= 0 the energy price. Sites have nonnegative
+the base load on site s's meter, and c_st >= 0 the energy price. Sites have nonnegative
 opening, plug, and upgrade cost coefficients f_s, a_s, and b_s. Bus k has cost
 F_k; movement arc a has operating cost c_ak. Let pi_s >= 0 price the modeled peak.
 
@@ -147,9 +149,17 @@ n_s\le\bar n_sy_s,\quad 0\le h_s\le\bar h_sy_s, \tag{5}
 $$
 
 $$
-L_{st}+\sum_kg_{kst}\le G_s^0+h_s,\qquad
-D_s\ge L_{st}+\sum_kg_{kst}. \tag{6}
+L_{st}y_s+\sum_kg_{kst}\le G_s^0+h_s,\qquad
+D_s\ge L_{st}y_s+\sum_kg_{kst}. \tag{6}
 $$
+
+Both rows hold for every slot t of the horizon (the peak row for every slot of the billing
+window), whether or not a charging variable exists there. L is load on the site's own meter,
+and that meter exists only when the site opens: its basic charge is paid per open site. A
+closed candidate site therefore bills no demand and obliges no capacity, whatever L and G^0.
+Load at an existing meter that is billed whether or not the site opens is the other reading;
+it would drop y_s from both rows and add its demand charge as a constant. The two readings
+are not mixed.
 
 The initial case assumes a shared controllable charger bank at each site and
 identical plugs there. A connection may change at an interval boundary. With
@@ -178,6 +188,12 @@ carry energy between days instead of resetting every day for free. If a fixed
 ready-energy target replaces the equality, state it and reconcile both schedules
 to the same target before comparing costs.
 
+The equality e_kT = e_k0 is the cyclic boundary: the bus ends the horizon, overnight
+recovery included, with the energy it started with. It is the only boundary under which a
+schedule repeats from one day to the next, and only if the recovery charging inside the
+horizon (depot plugs and power, depot grid capacity, the time after each return, the tariff
+window) is feasible.
+
 All terms in (1)-(8) are linear. Binary variables encode scheduling and
 connections; integer n encodes plug count. Symmetry breaking z_k >= z_k+1 is
 permitted only among fully identical candidate buses. No symmetry row may change
@@ -197,8 +213,27 @@ the energy on departing it: a_j = y_i - E_i - e_ij for the chosen predecessor, o
 s0 B - e_0j after a pull-out, both as two-sided big-M rows with M = smax B + e. Then
 y_j = a_j + Delta sum_t p_jt. The bound rB <= a_j keeps the deadhead above reserve,
 and rB + E_j <= y_j takes the trip's energy at its start, as in §1. Pull-in rows keep
-the last deadhead above reserve and define the end-of-day energy z_i. The objective
-charges the overnight restore to s0 B at the depot price.
+the last deadhead above reserve.
+
+*Terminal boundary: external overnight recovery.* For each pull-in i the restoration
+variable r_i satisfies
+
+$$r_i\ge s^0B-(y_i-E_i-e_{i0})\ \text{ if } x_{i0}=1,\qquad 0\le r_i\le(s^0-r)Bx_{i0},$$
+
+and the objective prices rho c_dep r_i / eta: the depot restores each bus to s0 B
+overnight, outside the modeled day. A bus that returns above s0 B is credited nothing,
+since the model has no export or vehicle-to-grid decision; under nonnegative prices no
+schedule earns revenue from terminal energy. Revision 098642b and earlier priced the
+restoration as s0 B - z_i with z_i up to smax B, a signed term: with cheap terminal energy
+and dear depot energy, a schedule that bought energy on route earned a depot "credit" of
+24.46 CAD on a tiny instance (`tests/test_regressions.py`, test 07).
+
+The recovery itself is not modeled: no depot plugs or charger power, no depot grid
+capacity, no time window after each return, no 22:00-06:00 tariff window, no circulation
+of buses into the next day. The restoration term is a sensitivity calculation of the energy
+bill, not a feasible recovery process, and no M1 schedule is claimed to repeat from one
+service day to the next. `checks/schedule.py` reports, per bus, the return time, the energy
+on return and the energy to restore, the inputs a depot model would need.
 
 Charging is restricted in two stated ways. A bus charges only at the first stop of its
 next trip, when that stop is a candidate site, in the slots of a window before the
@@ -206,11 +241,24 @@ departure (`time.window` in the scenario). A slot counts only if it lies wholly 
 the predecessor's arrival there, deadhead included: u_jt <= x_0j + sum_{i present} x_ij,
 and exactly one predecessor is chosen. So a bus deadheads first and then charges, and
 never charges at a trip's end stop when its next trip starts elsewhere. These are
-restrictions: the per-bus form admits every schedule of this one, so its optimum is
-no higher. On Route 100 consecutive trips alternate terminals, and both terminals are
-sites.
+restrictions of the charging opportunities. The per-bus form of §3 admits every
+schedule of this one, and so has an optimum no higher, only when both use the same
+depot, horizon and terminal-energy assumption. They do not as written: §3 imposes the
+cyclic boundary inside a horizon that includes recovery charging, whereas this form ends at
+the last pull-in and prices recovery externally. Containment, and the bound it would give,
+holds for a per-bus form with the same external restoration term. On Route 100 consecutive
+trips alternate terminals, and both terminals are sites.
 
-Rows (5) and (6) are unchanged, summed per site and slot over the windows present.
+Rows (5) and (6) are summed per site and slot over the windows present, with the base
+load L_s y_s in every capacity and peak row; the rows L_s y_s <= G0_s + h_s and
+D_s >= L_s y_s are written once per site, so the meter's obligations do not depend on which
+slots carry a charging variable. Revision 098642b and earlier wrote L only into the rows of
+slots with charging variables: a closed candidate site with such slots was billed its base
+load (5 CAD above the replay on a tiny instance), L > G0 forced a closed site open, and an
+open site with no charging in the billing window was billed no demand by the model while the
+replay billed it. `models/transit.py` compiles the instance (compatibility arcs, deadhead
+distances, energies, windows, input digests) once; M2's fixed-integer subproblems and M3
+reuse the rows and change only bounds and nonlinear terms.
 The replay in `checks/schedule.py` simulates each bus slot by slot. It checks energy,
 windows, presence, plugs and grid, and recomputes the cost from the schedule alone.
 `checks/enum_transit.py` solves tiny one-site timetables by enumerating every partition
@@ -219,7 +267,9 @@ of the trips into chains, with a charging MILP written separately for each parti
 A utility tariff ([Data](DATA.md) §3) changes three terms. The peak row of (6) is written only
 for slots whose start lies in the billing-demand window [`peak_from`, `peak_to`) of the day,
 so D_s is the peak inside the window: BC Hydro's Overnight Rate bills demand between 06:00
-and 22:00 only. The factor 1 + `rider` multiplies the energy, depot-energy, demand and basic
+and 22:00 only. A window with `peak_from` > `peak_to` wraps across midnight. In a one-day
+model the monthly demand charge enters as a normalized daily weight (charge x 12/365), a
+sensitivity coefficient, not a bill ([Design](DESIGN.md) §7). The factor 1 + `rider` multiplies the energy, depot-energy, demand and basic
 prices, and the basic charge is paid per open site. Absent keys give the whole day, 1 and 0,
 and the rows of before. The replay and the enumeration price the tariff separately; they
 agree with M1 on the tiny timetables for windows from 06:00 and from 07:30, the second of
@@ -374,7 +424,9 @@ M3 solver using spatial branching is a separate later project, not promised here
 
 **7. M4: specified energy scenarios**
 
-Let Omega be a finite scenario set with weights w_omega >= 0 summing to one.
+Let Omega be a finite scenario set with weights w_omega >= 0 summing to one; `m4`
+refuses any other weight vector, and any negative or non-finite consumption, before a row is
+built.
 Keep vehicle paths x, deployed buses z, sites y, plug counts n, and upgrades h
 common to every scenario. Let energy consumption d^omega vary. Initially keep
 travel times fixed so the same graph represents every scenario. Charging,

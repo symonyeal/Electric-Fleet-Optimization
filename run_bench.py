@@ -1,562 +1,70 @@
-"""The experiment matrix of Validation §3: tables and figures from the committed result bundles.
+"""The experiment matrix of Validation §3: tables and figures from the admitted result bundles.
 
     python run_bench.py            tables (docs/results/README.md) and figures (docs/results/fig)
-    python run_bench.py --run      first recompute every benchmark and transit case
+    python run_bench.py --run      first run every case of bench/cases.py
     python run_bench.py --grid     first recompute the charging-physics grid (M2/M1, R3/R1)
-        --missing                  only the cases and grid rows that have no bundle yet
+        --missing                  only the cases and grid rows with no valid matching bundle
+        --only KEY                 only this case (repeatable), e.g. transit/route100/M0/until8
         --jobs N                   N cases at a time (elapsed times are then under shared load)
 
-Every number in the tables is read from a bundle that names the revision that produced it.
+Fail-closed: if a requested case exits nonzero or writes a bundle that does not pass the schema
+check, the command fails and rewrites no report. Cases and the grid refuse a dirty tree. The
+work is split: bench/cases.py runs cases, bench/schema.py defines and checks bundles,
+bench/collect.py admits them and replays every U, bench/verdict.py decides, bench/report.py and
+bench/plots.py render.
 """
 
 import argparse
-import copy
-import json
-import subprocess
-import sys
-from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-import numpy as np
-
-OUT = Path("docs/results")
-E = ["E-n22-k4", "E-n23-k3", "E-n30-k3", "E-n33-k4", "E-n51-k5", "E-n76-k7", "E-n101-k8"]
-REPORT = {"E-n22-k4": 384.678035, "E-n23-k3": 573.130948, "E-n30-k3": 511.253921,
-          "E-n33-k4": 869.892175, "E-n51-k5": 570.170703, "E-n76-k7": 723.367517,
-          "E-n101-k8": 899.885589}                  # OPTIMAL_VALUE in the files (Data §1)
-EVRP_PYTHON = {"E-n22-k4": 384.67, "E-n23-k3": 571.94, "E-n30-k3": 509.47,
-               "E-n33-k4": 840.14, "E-n51-k5": 529.90, "E-n76-k7": 692.64,
-               "E-n101-k8": 839.29}                 # README best of VNS, SA, GSGA; unreplayed
-CASES = [*[("evrp", n, m, t, ()) for n in E for m, t in (("R0", 600), ("R1", 600),
-                                                         ("R2-ipm", 1800), ("R2-simplex", 1800))],
-         *[("transit", "route100", m, t, u) for u, t in ((("--until", "8"), 600),
-                                                         (("--until", "10"), 900), ((), 1800))
-           for m in ("M0", "M1")],
-         *[("transit", "route100", "M1", t, ("--scenario", s)) for s, t in (
-             ("rs1640-range", 1800), ("rs1650-range", 1800), ("rs1640", 600), ("rs1650", 600))]]
-BLUE, ORANGE, AQUA, YELLOW = "#2a78d6", "#eb6834", "#1baf7a", "#eda100"   # validated, dataviz
-INK, INK2, GRID = "#0b0b0b", "#52514e", "#e4e3df"
+from bench import cases, schema
+from bench.collect import collect
+from bench.plots import figures
+from bench.report import results, summary
 
 
-TRANSIT = {"route100": "Route 100, full day", "route100-until10h": "Route 100 to 10:00",
-           "route100-until8h": "Route 100 to 08:00"}
-SOURCED = {"route100-rs1640": "594 kWh pack, BC Hydro RS 1640 (Overnight Rate) at every meter",
-           "route100-rs1650": "594 kWh pack, RS 1650 (Demand Transition) on route, RS 1640 at "
-                              "the depot",
-           "route100-rs1640-range": "285.8 kWh pack (TransLink's 150 km), RS 1640 at every meter",
-           "route100-rs1650-range": "285.8 kWh pack (TransLink's 150 km), RS 1650 on route, "
-                                    "RS 1640 at the depot"}
-
-
-def transit(tag):
-    """The M1 bundle of a Route 100 run, its corridor and its scenario; tag is
-    route100[-scenario][-untilHh], the scenario file data/scenarios/route100[-scenario].toml."""
-    from data.scenario import load
-    with open("tests/fixtures/route100.json", encoding="utf-8") as f:
-        c = json.load(f)
-    sc, _, h = tag.partition("-until")
-    if h:
-        c = dict(c, trips=[t for t in c["trips"] if t["dep"] < int(h.removesuffix("h")) * 3600])
-    return bundle(OUT / "transit" / f"{tag}-M1.json"), c, load(f"data/scenarios/{sc}.toml")[0]
-
-
-def bundle(path):
-    p = Path(path)
-    return json.loads(p.read_text(encoding="utf-8")) if p.exists() else None
-
-
-def fmt(x, d=2):
-    return "-" if x is None else f"{x:,.{d}f}"
-
-
-def best(n):
-    """The shortest replayed routes of instance n among all bundles: (length, routes, file)."""
-    from checks.route import read_routes, replay
-    from data.evrp import load
-    p, b = load(f"evrp-2019/{n}"), None
-    for f in sorted([*(OUT / "evrp").glob(f"{n}-*.routes"),
-                     *(OUT / "baseline").glob(f"{n}-*.routes")]):
-        R = read_routes(f)
-        rp = replay(p, R)
-        if rp["ok"] and (b is None or rp["length"] < b[0] - 1e-9):
-            b = (rp["length"], R, f.name)
-    return p, b
-
-
-def runs(p, R):
-    """Segments (between customers or the depot) that visit two or more stations in a row
-    (Phase 9, criterion 4; Routing §4: R1 allows them through station paths)."""
-    F = set(p["F"]) - {p["depot"]}
-    k = 0
-    for r in R:
-        run = 0
-        for z in r:
-            run = run + 1 if z - 1 in F else 0
-            k += run == 2
-    return k
-
-
-def verdicts():
-    rows, tol = [], 1e-6
-    for n in E:
-        r = {m: bundle(OUT / "evrp" / f"{n}-{m}.json") for m in ("R0", "R1", "R2-ipm",
-                                                                 "R2-simplex")}
-        gsga = [b for f in sorted((OUT / "baseline").glob(f"{n}-GSGA-*.json"))
-                if (b := bundle(f)) and b.get("U") is not None]
-        Ls = [b["L"] for m, b in r.items() if b and b.get("L") is not None and m != "R0"]
-        if r["R0"] and r["R0"].get("L") is not None:
-            Ls.append(r["R0"]["L"])                 # L(R0) <= z(R0) <= z(R1) (Routing §3)
-        Us = [b["U"] for m, b in r.items() if b and m != "R0" and b.get("U") is not None]
-        Us += [b["U"] for b in gsga]
-        L, U = (max(Ls) if Ls else None), (min(Us) if Us else None)
-        V = REPORT[n]
-        if U is not None and L is not None and U - L <= tol * (1 + abs(U)):
-            v = "certified optimal"
-        else:
-            v = "bracketed" if U is not None and L is not None else "open"
-        if U is not None and V > U + tol * (1 + V):
-            v += "; report value not optimal"
-        elif L is not None and V < L - tol * (1 + V):
-            v += "; report value below a valid bound"
-        rows.append((n, V, EVRP_PYTHON[n], min((b["U"] for b in gsga), default=None),
-                     r["R0"]["U"] if r["R0"] and r["R0"].get("certified") else None,
-                     L, U, None if L is None or U is None else (U - L) / max(1, abs(U)), v))
-    return rows
-
-
-def cpu(b):
-    """The processor a bundle was measured on, from its provenance."""
-    return ((b.get("provenance") or {}).get("host") or {}).get("cpu", "not recorded")
-
-
-def duals():
-    rows = []
-    for n in E:
-        a, b = (bundle(OUT / "evrp" / f"{n}-R2-{d}.json") for d in ("ipm", "simplex"))
-        if a and b:
-            rows.append((n, *[(x["iterations"], x["pricing"], x["elapsed"], x["L"],
-                               x["converged"], cpu(x)) for x in (a, b)]))
-    return rows
-
-
-def write_readme():
-    from checks.schedule import replay_energy
-    V = verdicts()
-    lines = ["# Results", "",
-             ("Regenerated by `python run_bench.py` from the bundles in this directory; each "
-             "bundle records the revision, parameters and data checksums that produced it. "
-             "Bundles written before 6b290be record the revision at completion rather than at "
-             "start, and mark '+dirty' when any file differed, untracked bundles included."), "",
-             "## 2019 E instances (Validation §3, EVRP-06)", "",
-             ("L is the best valid lower bound (R1 and R2 dual bounds, and R0's bound, "
-             "since z(R0) <= z(R1)); U the shortest replayed solution (R1, R2's "
-             "restricted master, GSGA). evrp-python's README values are not replayed. The "
-             "last column counts segments of U's routes that pass two or more stations in a "
-             "row (Routing §4)."), "",
-             ("| Instance | Report value | evrp-python (README) | GSGA replayed | R0 | L | U | "
-             "Gap | Verdict | Multi-station segments |"),
-             "|---|---:|---:|---:|---:|---:|---:|---:|---|---:|"]
-    for n, Vr, ep, g, r0, L, U, gap, v in V:
-        p, B = best(n)
-        lines.append(f"| {n} | {Vr:.6f} | {ep:.2f} | {fmt(g, 6)} | {fmt(r0, 6)} | "
-                     f"{fmt(L, 6)} | {fmt(U, 6)} | "
-                     f"{'-' if gap is None else f'{100 * gap:.3f}%'} | {v} | "
-                     f"{'-' if B is None else runs(p, B[1])} |")
-    D = duals()
-    lines += ["", "## Interior versus simplex duals in R2 (CG-04)", "",
-              ("Seconds are wall-clock on the processor named, and compare only within a row. "
-              "The bound is the best (R2.2) from a completed exact pricing, within 1e-6 of the "
-              "master LP when converged; '-' when no exact pricing completed in its limit."),
-              "",
-              ("| Instance | Iterations (IPM / simplex) | Pricing calls | Seconds | Bound "
-              "(IPM / simplex) | Converged | Processor |"), "|---|---:|---:|---:|---:|---|---|"]
-    for n, a, b in D:
-        lines.append(f"| {n} | {a[0]} / {b[0]} | {a[1]} / {b[1]} | {a[2]:.1f} / {b[2]:.1f} | "
-                     f"{fmt(a[3], 4)} / {fmt(b[3], 4)} | {a[4]} / {b[4]} | "
-                     f"{a[5] if a[5] == b[5] else f'{a[5]} / {b[5]}'} |")
-    lines += ["", "## Route 100 (Validation §3, TRN-09)", "",
-              ("Illustrative battery, charger and cost parameters (data/scenarios/route100.toml);"
-              " costs in illustrative CAD for the modeled window. M0 minimizes the fleet "
-              "without batteries; its duties are replayed with the battery and no charging, "
-              "which gives their deadhead, their cost where feasible, and the number of "
-              "buses that fall below the reserve. M1 values are replayed schedules."), "",
-              ("| Window | Trips | M0 fleet | M0 deadhead km | M0 buses below reserve | M0 cost | "
-              "M1 fleet | M1 deadhead km | M1 cost U | M1 L | Gap | M1 status |"),
-              "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|"]
-    for tag in reversed(TRANSIT):
-        if not (a := bundle(OUT / "transit" / f"{tag}-M0.json")):
-            continue
-        b, c, v = transit(tag)
-        r0 = replay_energy(c, v, a["duties"], {}, {})
-        rB = v["battery"]["reserve"] * v["battery"]["B"]
-        E = sum(min(e for _, e in tr) < rB - 1e-6 for tr in r0["trace"])
-        dh = r0["parts"]["deadhead"] / v["cost"]["deadhead"]
-        row = (f"| {TRANSIT[tag]} | {a['trips']} | {a['fleet']} | {dh:.1f} | {E} | "
-               f"{fmt(r0['cost']) if not E else '-'} |")
-        if b:
-            dh1 = b["replay"]["parts"]["deadhead"] / v["cost"]["deadhead"]
-            gap = "-" if b["gap_rel"] is None else f"{100 * b['gap_rel']:.3f}%"
-            row += (f" {b['fleet']} | {dh1:.1f} | {fmt(b['U'])} | {fmt(b['L'])} | {gap} | "
-                    f"{b['status']} |")
-        else:
-            row += " - | - | - | - | - | - |"
-        lines.append(row)
-    S = [(t, *transit(t)) for t in SOURCED if bundle(OUT / "transit" / f"{t}-M1.json")]
-    a = bundle(OUT / "transit" / "route100-M0.json")
-    if S and a:
-        lines += ["", "## Route 100 on sourced parameters (Data §3)", "",
-                  ("Full service day, 2026-10-07. Battery 594 kWh (Nova LFSe+) or 285.8 kWh, the "
-                   "smallest pack consistent with TransLink's 'over 150 km' per charge; 1.429 "
-                   "kWh/km (Altoona 40-ft arterial cycle), charging efficiency 0.90 (Foothill), "
-                   "up to 5 plugs per loop (TransLink's 10 on-route chargers, split by inference), "
-                   "and BC Hydro's fleet tariff as published: riders included, taxes excluded, "
-                   "the monthly demand charge spread over 365/12 days. Charger power, the depot, "
-                   "the operating band and the capital and operating costs stay illustrative. "
-                   "TransLink runs Route 100 with 19 battery-electric buses and overhead chargers "
-                   "at both loops. M0's battery-free duties are replayed with this battery and no "
-                   "charging; M1 values are replayed schedules."), "",
-                  ("| Scenario | M0 duties below reserve | M1 fleet | Plugs | Charged on route, "
-                   "kWh | Billed demand, kW | Electricity, CAD/day | Cost U | L | Gap | Status |"),
-                  "|---|---:|---:|---|---:|---:|---:|---:|---:|---:|---|"]
-        for tag, b, c, v in S:
-            r0 = replay_energy(c, v, a["duties"], {}, {})
-            rB = v["battery"]["reserve"] * v["battery"]["B"]
-            E = sum(min(e for _, e in tr) < rB - 1e-6 for tr in r0["trace"])
-            co, P = v["cost"], b["replay"]["parts"]
-            kwh = sum(sum(d.values()) for d in b["plan"].values()) * v["time"]["delta"] / 3600
-            kw = P["peak"] / ((1 + co.get("rider", 0.0)) * co["peak"])
-            el = sum(P.get(k, 0.0) for k in ("energy", "depot_energy", "peak", "basic"))
-            plugs = ", ".join(f"{v['sites'][s]['name']} {i['n']}" for s, i in b["infra"].items())
-            gap = "-" if b["gap_rel"] is None else f"{100 * b['gap_rel']:.3f}%"
-            lines.append(f"| {SOURCED[tag]} | {E} of {a['fleet']} | {b['fleet']} | "
-                         f"{plugs or 'none'} | {kwh:,.0f} | {kw:,.0f} | {fmt(el)} | {fmt(b['U'])} "
-                         f"| {fmt(b['L'])} | {gap} | {b['status']} |")
-    G = bundle(OUT / "grid" / "grid.json")
-    if G:
-        lines += ["", "## Charging physics (OA-04)", "",
-                  ("Each row fixes the loss coefficient alpha (illustrative). M2 and R3 are "
-                  "solved by outer approximation, M1 and R1 by HiGHS, on the same instance. "
-                  "M2 against M1 compares cost; R3 against R1 compares the replayed route "
-                  "length, since R3 also prices energy and dwell time. 'With' is filled only "
-                  "when OA certified its value; the OA gap is on the model's own objective, "
-                  "and 'Without' carries the status of the model without losses. The "
-                  "declared 250 kWh battery charges nothing before 06:30; the 100 kWh rows are "
-                  "declared so that the window must charge. The eight-customer R3 row measures "
-                  "the size at which OA stops closing."), "",
-                  ("| Model pair | Instance | Measure | alpha | Without | With | Increase | "
-                   "OA gap | Status | Seconds |"),
-                  "|---|---|---|---:|---:|---:|---:|---:|---|---:|"]
-        for g in G:
-            inc = None if g["base"] is None or g["loss"] is None else g["loss"] - g["base"]
-            gap = "-" if g.get("gap") is None else f"{100 * g['gap']:.3f}%"
-            lines.append(f"| {g['pair']} | {g['instance']} | {g['measure']} | {g['alpha']:g} | "
-                         f"{fmt(g['base'], 3)} ({g.get('base_status', '-')}) | "
-                         f"{fmt(g['loss'], 3)} | {fmt(inc, 3)} | {gap} | {g['status']} | "
-                         f"{fmt(g.get('elapsed'), 1)} |")
-    lines += ["", "## Figures", "", "![E-n22-k4](fig/routes-E-n22-k4.png)", "",
-              "![R2 duals](fig/r2-duals-E-n22-k4.png)", ""]
-    for tag in drawn():
-        lines += [f"![{name(tag)} timeline](fig/timeline-{tag}.png)", "",
-                  f"![{name(tag)} energy](fig/energy-{tag}.png)", ""]
-    (OUT / "README.md").write_text("\n".join(lines), encoding="utf-8")
-
-
-def summary():
-    """The results block of the top-level README, between its markers."""
-    from checks.schedule import replay_energy
-    revs = sorted({(bundle(f).get("provenance") or {}).get("revision") or "unrecorded"
-                   for f in OUT.glob("*/*.json") if f.parent.name != "grid"})
-    L = [("Regenerated by `python run_bench.py` from the bundles in "
-          "[docs/results](docs/results/README.md), which name the code revision of each run "
-          f"({', '.join(revs)})."), "",
-         "| Instance | Report value | U (replayed) | L | Gap | Verdict |",
-         "|---|---:|---:|---:|---:|---|"]
-    for n, Vr, _, _, _, lo, up, gap, v in verdicts():
-        L.append(f"| {n} | {Vr:.6f} | {fmt(up, 6)} | {fmt(lo, 6)} | "
-                 f"{'-' if gap is None else f'{100 * gap:.3f}%'} | {v} |")
-    D = {n: (a, b) for n, a, b in duals()}
-    if "E-n22-k4" in D:
-        a, b = D["E-n22-k4"]
-        L += ["", (f"Column generation on E-n22-k4 reached the bound {a[3]:.4f} with interior "
-                   f"duals in {a[2]:.1f} s and {b[3]:.4f} with simplex duals in {b[2]:.1f} s.")]
-    a = bundle(OUT / "transit" / "route100-M0.json")
-    if a:
-        _, c, v = transit("route100")
-        r0 = replay_energy(c, v, a["duties"], {}, {})
-        rB = v["battery"]["reserve"] * v["battery"]["B"]
-        E = sum(min(e for _, e in tr) < rB - 1e-6 for tr in r0["trace"])
-        L += ["", (f"Route 100 on {c.get('date', 'the service day')}: {a['trips']} trips need "
-                   f"{a['fleet']} buses without batteries (M0). With the illustrative "
-                   f"{v['battery']['B']:g} kWh battery and no charging, "
-                   + (f"all {E}" if E == a["fleet"] else f"{E} of those {a['fleet']}")
-                   + " duties fall below the reserve.")]
-        b = bundle(OUT / "transit" / "route100-M1.json")
-        if b:
-            gap = "-" if b["gap_rel"] is None else f"{100 * b['gap_rel']:.2f}%"
-            L[-1] += (f" M1 schedules the day with {b['fleet']} buses and "
-                      f"{sum(i['n'] for i in b['infra'].values())} plugs at "
-                      f"{len(b['infra'])} sites, cost {fmt(b['U'])} against the bound "
-                      f"{fmt(b['L'])} (gap {gap}, {b['status']}).")
-    for tag, what in SOURCED.items():
-        b = bundle(OUT / "transit" / f"{tag}-M1.json")
-        if b:
-            gap = "-" if b["gap_rel"] is None else f"{100 * b['gap_rel']:.2f}%"
-            L += ["", (f"On sourced parameters ({what}; [Data](docs/DATA.md) §3), M1 "
-                       f"schedules the day with {b['fleet']} buses and "
-                       f"{sum(i['n'] for i in b['infra'].values())} plugs, cost "
-                       f"{fmt(b['U'])} CAD/day against the bound {fmt(b['L'])} (gap {gap}, "
-                       f"{b['status']}); TransLink runs 19 battery-electric buses.")]
-    return L
-
-
-def write_summary():
-    f = Path("README.md")
-    s = f.read_text(encoding="utf-8")
-    i, j = s.index("<!-- results:begin -->"), s.index("<!-- results:end -->")
-    f.write_text(s[:i] + "<!-- results:begin -->\n" + "\n".join(summary()) + "\n" + s[j:],
-                 encoding="utf-8")
-
-
-def figures():
-    import matplotlib
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
-    from matplotlib.patches import Patch
-    from checks.schedule import replay_energy
-    plt.rcParams.update({"font.size": 9, "axes.edgecolor": INK2, "axes.labelcolor": INK2,
-                         "xtick.color": INK2, "ytick.color": INK2, "axes.grid": True,
-                         "grid.color": GRID, "grid.linewidth": 0.6, "axes.spines.top": False,
-                         "axes.spines.right": False, "figure.facecolor": "#fcfcfb",
-                         "axes.facecolor": "#fcfcfb"})
-    (OUT / "fig").mkdir(parents=True, exist_ok=True)
-    p, B = best("E-n22-k4")
-    if B:
-        fig, ax = plt.subplots(figsize=(6, 5.2))
-        X = p["X"]
-        ax.scatter(*X[p["I"]].T, s=18, color=INK2, zorder=3, label="customer")
-        ax.scatter(*X[p["F"]].T, s=40, marker="^", color=INK, zorder=3, label="station")
-        ax.scatter(*X[[p["depot"]]].T, s=60, marker="s", color=INK, zorder=4, label="depot")
-        for k, r in enumerate(B[1]):
-            v = np.array([X[z - 1] for z in r])
-            col = [BLUE, ORANGE, AQUA, YELLOW][k % 4]
-            ax.plot(*v.T, color=col, lw=2, zorder=2)
-            far = v[np.argmax(((v - X[p["depot"]]) ** 2).sum(1))]
-            ax.annotate(f"route {k + 1}", far, xytext=(4, 4), textcoords="offset points",
-                        color=INK, fontsize=8)
-        ax.set_title(f"E-n22-k4: shortest replayed solution, length {B[0]:.6f}",
-                     color=INK, loc="left")
-        ax.set_aspect("equal")
-        ax.legend(frameon=False, loc="lower left", fontsize=8)
-        fig.tight_layout()
-        fig.savefig(OUT / "fig" / "routes-E-n22-k4.png", dpi=150)
-        plt.close(fig)
-    fig, axes = plt.subplots(1, 2, figsize=(9, 3.4), sharey=True)
-    for ax, d in zip(axes, ("ipm", "simplex"), strict=True):
-        b = bundle(OUT / "evrp" / f"E-n22-k4-R2-{d}.json")
-        if not b:
-            continue
-        T = b["trajectory"]
-        t = [x["t"] for x in T]
-        ax.plot(t, [x["f"] for x in T], color=BLUE, lw=2, label="master value")
-        ax.plot([x["t"] for x in T if x["L"] is not None], [x["L"] for x in T
-                if x["L"] is not None], color=ORANGE, lw=2, marker="o", ms=4,
-                label="bound (R2.2)")
-        ax.set_title(("interior" if d == "ipm" else "simplex") + " duals", color=INK, loc="left")
-        ax.set_xlabel("seconds")
-    axes[0].set_ylabel("length")
-    axes[0].legend(frameon=False, fontsize=8)
-    lo = [bundle(OUT / "evrp" / f"E-n22-k4-R2-{d}.json") for d in ("ipm", "simplex")]
-    if all(lo):
-        axes[0].set_ylim(min(b["L"] for b in lo) - 10, min(b["L"] for b in lo) + 60)
-    fig.suptitle("E-n22-k4, R2: master value and bound", color=INK, x=0.02, ha="left")
-    fig.tight_layout()
-    fig.savefig(OUT / "fig" / "r2-duals-E-n22-k4.png", dpi=150)
-    plt.close(fig)
-    for tag in drawn():
-        draw(tag, plt, Patch, replay_energy)
-
-
-def drawn():
-    """The Route 100 runs drawn: the first illustrative window with an M1 bundle, then each
-    sourced run whose schedule charges on route."""
-    first = next((t for t in TRANSIT if bundle(OUT / "transit" / f"{t}-M1.json")), None)
-    return [t for t in (first, *SOURCED) if t and (b := bundle(OUT / "transit" / f"{t}-M1.json"))
-            and (t in TRANSIT or b["plan"])]
-
-
-def name(tag):
-    return TRANSIT.get(tag) or f"Route 100, full day, {SOURCED[tag]}"
-
-
-def draw(tag, plt, Patch, replay_energy):
-    """Timeline, and replayed energy with site power, of one Route 100 M1 bundle."""
-    b, c, v = transit(tag)
-    T = {t["id"]: t for t in c["trips"]}
-    dl, n = v["time"]["delta"], len(b["duties"])
-    fig, ax = plt.subplots(figsize=(9, 1.4 + 0.2 * n))
-    for k, d in enumerate(b["duties"]):
-        for tid in d:
-            t = T[tid]
-            ax.barh(k, (t["arr"] - t["dep"]) / 3600, left=t["dep"] / 3600, height=0.6,
-                    color=BLUE, edgecolor="#fcfcfb", linewidth=1)
-            for s_ in b["plan"].get(tid, {}):
-                ax.barh(k, dl / 3600, left=int(s_) * dl / 3600, height=0.6, color=ORANGE,
-                        edgecolor="#fcfcfb", linewidth=1)
-    ax.set_yticks(range(n), [f"bus {k + 1}" for k in range(n)], fontsize=7)
-    ax.margins(x=0.01)
-    ax.invert_yaxis()
-    ax.set_xlabel("hour of the service day")
-    ax.legend([Patch(color=BLUE), Patch(color=ORANGE)], ["trip", "charging slot"], ncol=2,
-              frameon=False, fontsize=8, loc="lower right", bbox_to_anchor=(1, 1))
-    ax.set_title(f"{name(tag)}, M1: buses, trips and charging ("
-                 + ("illustrative scenario)" if tag in TRANSIT else "sourced parameters)"),
-                 color=INK, loc="left")
-    fig.tight_layout()
-    fig.savefig(OUT / "fig" / f"timeline-{tag}.png", dpi=150)
-    plt.close(fig)
-    rp = replay_energy(c, v, b["duties"], {k: {int(s_): kw for s_, kw in d.items()}
-                                           for k, d in b["plan"].items()}, b["infra"])
-    B = v["battery"]["B"]
-    if rp["load"]:
-        fig, (a1, a2) = plt.subplots(2, 1, figsize=(9, 5.6), sharex=True,
-                                     gridspec_kw=dict(height_ratios=(3, 2)))
-    else:
-        fig, a1 = plt.subplots(figsize=(9, 3.6))
-    kwh = [sum(sum(b["plan"].get(t, {}).values()) for t in d) for d in b["duties"]]
-    top = max(range(n), key=lambda k: kwh[k])
-    for k, tr in enumerate(rp["trace"]):
-        a1.plot([t / 3600 for t, _ in tr], [e for _, e in tr], color=BLUE if k == top else
-                "#b7b5ae", lw=2 if k == top else 1, zorder=3 if k == top else 2)
-    a1.axhline(v["battery"]["reserve"] * B, color=INK2, lw=1, ls="--")
-    a1.text(a1.get_xlim()[0], v["battery"]["reserve"] * B, " reserve", va="bottom", color=INK2,
-            fontsize=8)
-    a1.set_ylabel("battery energy, kWh")
-    who = f"bus {top + 1}, which charges most, in blue" if kwh[top] else "gray"
-    a1.set_title(f"{name(tag)}, M1 replayed: energy per bus ({who})"
-                 + ("" if rp["load"] else "; no bus charges in this window"),
-                 color=INK, loc="left")
-    if not rp["load"]:
-        a1.set_xlabel("hour of the service day")
-    else:
-        lo, hi = min(k[1] for k in rp["load"]), max(k[1] for k in rp["load"])
-        Z = [s for s in v["sites"] if any(k[0] == s for k in rp["load"])]
-        for s in Z:
-            col = (ORANGE, AQUA)[list(v["sites"]).index(s)]
-            y = [rp["load"].get((s, s_), (0, 0.0))[1] for s_ in range(lo, hi + 1)]
-            a2.step([s_ * dl / 3600 for s_ in range(lo, hi + 2)], [*y, y[-1]], where="post",
-                    color=col, lw=1.5, label=s)
-        a2.set_ylabel("grid power, kW")
-        a2.set_xlabel("hour of the service day")
-        if len(Z) > 1:
-            a2.legend(frameon=False, fontsize=8)
-        else:
-            a2.set_title(f"charging power drawn at {Z[0]}", color=INK2, loc="left", fontsize=9)
-    fig.tight_layout()
-    fig.savefig(OUT / "fig" / f"energy-{tag}.png", dpi=150)
-    plt.close(fig)
-
-
-def out(case):
-    """The bundle run_case.py writes for a case of CASES."""
-    track, n, m, _, u = case
-    a = dict(zip(u[::2], u[1::2], strict=True))
-    if "--scenario" in a:
-        n = f"{n}-{a['--scenario']}"
-    if "--until" in a:
-        n = f"{n}-until{float(a['--until']):g}h"
-    return OUT / track / f"{n}-{m}.json"
-
-
-def run(missing=False, jobs=1):
-    """Every case of CASES, or with missing only those without a bundle, jobs at a time."""
-    Q = [k for k in CASES if not (missing and out(k).exists())]
-    cmd = lambda k: [sys.executable, "run_case.py", *k[:3], "--time", str(k[3]), *k[4]]
-    with ThreadPoolExecutor(jobs) as X:
-        list(X.map(lambda k: subprocess.run(cmd(k), check=False), Q))
-
-
-def grid(missing=False):
-    """OA-04: M2 against M1 on Route 100 before 06:30, R3 against R1 on E-n22-k4 restricted to
-    its six customers farthest from the depot, over declared loss coefficients (illustrative).
-    With the declared 250 kWh battery no bus charges before 06:30, so M2 = M1 there at every
-    alpha; the 100 kWh rows make the window charge. The eight-customer R3 row measures where OA
-    stops closing. Each row is written when it finishes; with missing, rows of this grid
-    already in the bundle are kept."""
-    from checks.certificate import HOST, REVISION
-    from checks.route import replay_charge
-    from data.evrp import load, sub
-    from data.scenario import load as scenario
-    from models.charge import m2
-    from models.fleet import m1
-    from models.recharge import r3
-    from models.route import r1
-    with open("tests/fixtures/route100.json", encoding="utf-8") as fh:
-        c = json.load(fh)
-    c = dict(c, trips=[t for t in c["trips"] if t["dep"] < 6.5 * 3600])
-    v, _ = scenario("data/scenarios/route100.toml")
-    v0 = copy.deepcopy(v)
-    v0["charger"]["gamma"] = 0.0
-    p = load("evrp-2019/E-n22-k4")
-    far = sorted(p["I"], key=lambda i: -p["D"][p["depot"], i])
-    Q = {n: sub(p, far[:n], p["F"]) for n in (6, 8)}
-    sc, _ = scenario("data/scenarios/r3.toml")
-    K = [*[("M2 / M1", B, a) for B in (v0["battery"]["B"], 100.0)
-           for a in (3.3e-5, 6.7e-5, 1.3e-4)],
-         *[("R3 / R1", 6, a) for a in (0.0, 2.5e-4, 5e-4, 1e-3)], ("R3 / R1", 8, 0.0)]
-    nm = lambda k: (f"route100 before 06:30, {k[1]:g} kWh" if k[0] == "M2 / M1"
-                    else Q[k[1]]["name"])
-    idx = {(k[0], nm(k), k[2]): j for j, k in enumerate(K)}
-    key = lambda g: (g["pair"], g["instance"], g["alpha"])
-    f = OUT / "grid" / "grid.json"
-    G = [g for g in (bundle(f) or []) if missing and key(g) in idx]
-    have, base = {key(g) for g in G}, {}
-
-    def put(g, r, b):
-        G.append(dict(g, base_status=b["status"], U=r["U"], L=r["L"], gap=r["gap_rel"],
-                      status=r["status"], elapsed=r["elapsed"], revision=REVISION, host=HOST))
-        G.sort(key=lambda g: idx[key(g)])
-        f.parent.mkdir(parents=True, exist_ok=True)
-        f.write_text(json.dumps(G, indent=1) + "\n", encoding="utf-8")
-
-    for k in K:
-        pair, z, a = k
-        if (pair, nm(k), a) in have:
-            continue
-        if pair == "M2 / M1":
-            w = copy.deepcopy(v0)
-            w["battery"]["B"] = z
-            b = base[k[:2]] = base.get(k[:2]) or m1(c, w, name="route100-until6.5h",
-                                                    time_limit=600)
-            w["charger"]["alpha"] = a
-            r = m2(c, w, name="route100-until6.5h", max_iter=40, time_limit=1800)
-            put(dict(pair=pair, instance=nm(k), measure="cost", alpha=a, base=b["U"],
-                     loss=r["U"] if r["status"] == "optimal" else None), r, b)
-            continue
-        q = Q[z]
-        b = base[k[:2]] = base.get(k[:2]) or r1(q)
-        s = copy.deepcopy(sc)
-        s["charger"]["alpha"] = a
-        r = r3(q, s, max_iter=60, time_limit=1800)
-        y = None
-        if r["status"] == "optimal":
-            y = replay_charge(q, s, r["routes"], {tuple(map(int, e.split(":"))): qt
-                                                  for e, qt in r["charges"].items()})["length"]
-        put(dict(pair=pair, instance=nm(k), measure="route length", alpha=a, base=b["U"],
-                 loss=y), r, b)
-
-
-if __name__ == "__main__":
+def parse(argv):
     a = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     a.add_argument("--run", action="store_true")
     a.add_argument("--grid", action="store_true")
     a.add_argument("--missing", action="store_true")
+    a.add_argument("--only", action="append", default=[])
     a.add_argument("--jobs", type=int, default=1)
-    x = a.parse_args()
+    return a.parse_args(argv)
+
+
+def write_summary(readme, lines):
+    s = Path(readme).read_text(encoding="utf-8")
+    i, j = s.index("<!-- results:begin -->"), s.index("<!-- results:end -->")
+    schema.write_text(readme, s[:i] + "<!-- results:begin -->\n" + "\n".join(lines) + "\n"
+                      + s[j:])
+
+
+def main(argv=None, out=cases.OUT, readme=Path("README.md")):
+    x = parse(argv)
+    out = Path(out)
+    todo = cases.select(cases.CASES, x.only)
+    if (x.run or x.grid) and schema.identity()["dirty"] and out.resolve() == \
+            cases.OUT.resolve():
+        raise SystemExit("refusing to run cases into docs/results from a dirty tree; commit first")
     if x.run:
-        run(x.missing, x.jobs)
+        if x.missing:
+            todo = cases.missing(todo, out)
+        failed = cases.run(todo, x.jobs, out)
+        if failed:
+            for k, why in failed:
+                print(f"FAILED {k.key}: {why}")
+            raise SystemExit(f"{len(failed)} of {len(todo)} requested cases failed; no report "
+                             "was rewritten")
     if x.grid:
-        grid(x.missing)
-    figures()
-    write_readme()
-    write_summary()
-    print((OUT / "README.md").read_text(encoding="utf-8"))
+        from bench.grid import grid
+        grid(out, x.missing)
+    D = collect(out)
+    figures(D, out)
+    schema.write_text(out / "README.md", results(D))
+    write_summary(readme, summary(D))
+    print((out / "README.md").read_text(encoding="utf-8"))
+
+
+if __name__ == "__main__":
+    main()

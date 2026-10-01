@@ -10,10 +10,45 @@ KW = dict(solver=dict(code=0, message="test"), elapsed=0.5, provenance=dict(revi
 
 
 def test_status_taxonomy():
-    assert STATUS == {"optimal", "feasible_limit", "no_incumbent", "infeasible", "unbounded",
+    """A solver reports one of SOLVER; the public status adds the two states only the contract
+    can assign."""
+    from checks.certificate import SOLVER
+    assert SOLVER == {"optimal", "feasible_limit", "no_incumbent", "infeasible", "unbounded",
                       "local", "numerical", "stall", "limit"}
+    assert STATUS == SOLVER | {"invalid_bound", "validation_failed"}
     with pytest.raises(ValueError):
         record("R1", "E-n22-k4", "solved", **KW)
+    with pytest.raises(ValueError):
+        record("R1", "E-n22-k4", "invalid_bound", **KW)       # a public state, not a solver's
+
+
+@pytest.mark.parametrize("solver,U,L,val,public", [
+    ("optimal", 10.0, 10.0, "replayed", "optimal"),
+    ("feasible_limit", 10.0, 10.0, "replayed", "optimal"),     # the certificate decides
+    ("optimal", 10.0, 9.0, "replayed", "feasible_limit"),
+    ("optimal", None, 9.0, "not_available", "no_incumbent"),
+    ("optimal", None, 9.0, "validation_failed", "validation_failed"),
+    ("feasible_limit", 10.0, 11.0, "replayed", "invalid_bound"),
+    ("infeasible", None, None, "not_available", "infeasible"),
+    ("stall", 10.0, 9.0, "replayed", "stall"),
+])
+def test_public_status_is_derived(solver, U, L, val, public):
+    r = record("R1", "x", solver, U=U, L=L, validation=val, **KW)
+    assert r["status"] == public and r["solver_status"] == solver
+    assert r["certified"] == (public == "optimal")
+    from checks.certificate import consistent
+    assert consistent(r) == []
+
+
+def test_stored_contradictions_are_found():
+    """The E-n22-k4 R2 bundles of eff961f: status optimal, certified false, 1.086% gap."""
+    from checks.certificate import consistent
+    legacy = dict(status="optimal", U=384.678, L=380.5005, certified=False, defect=None)
+    assert consistent(legacy)
+    r = record("R2", "x", "feasible_limit", U=384.678, L=380.5005, **KW)
+    assert consistent(r) == [] and r["status"] == "feasible_limit"
+    r["status"] = "optimal"
+    assert consistent(r)
 
 
 def test_gap_needs_both_bounds():
@@ -36,13 +71,17 @@ def test_certification_rule():
     assert not certified(100.0, 99.0)
     assert certified(100.0, 99.0, eps_abs=0, eps_rel=0.011)
     assert not certified(None, 1.0)
+    assert not certified(100.0, 100.5)                  # two-sided: a crossed bound
+    assert certified(100.0, 101.0, eps_abs=0, eps_rel=0.011)  # crossing within tol = 1.1
+    assert not certified(100.0, 101.2, eps_abs=0, eps_rel=0.011)
 
 
 def test_negative_gap_is_a_defect():
     r = record("R1", "x", "optimal", U=100.0, L=100.5, **KW)
     assert r["gap_abs"] == pytest.approx(-0.5)
-    assert r["defect"] == "negative gap"
-    assert record("R1", "x", "optimal", U=100.0, L=100.0 + 1e-9, **KW)["defect"] is None
+    assert r["defect"] == "negative gap" and not r["certified"]
+    r = record("R1", "x", "optimal", U=100.0, L=100.0 + 1e-9, **KW)
+    assert r["defect"] is None and r["certified"]
 
 
 def test_record_requires_solver_time_and_provenance():

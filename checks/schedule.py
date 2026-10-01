@@ -40,6 +40,13 @@ def replay(c, duties, sc, tol=1e-9):
     return dict(ok=not D, defects=D, fleet=len(duties), deadhead_km=dh)
 
 
+def billed(t, w0, w1):
+    """Second t of the service day lies in the billing window [w0, w1) of its day; w0 > w1 wraps
+    across midnight (Data §3). Written here, apart from the models, on purpose."""
+    s = t % 86400
+    return w0 <= s < w1 if w0 <= w1 else s >= w0 or s < w1
+
+
 def replay_energy(c, v, duties, plan, infra, tol=1e-6, loss=False):
     """Replay an M1 (or, with loss, M2) schedule slot by slot, independently of its rows
     (Models §3-§4).
@@ -48,12 +55,16 @@ def replay_energy(c, v, duties, plan, infra, tol=1e-6, loss=False):
             that trip at its first stop; infra .. {site: dict(n=plugs, h=kW upgrade)}
             loss .... grid power p/eta + alpha p^2 (10), and the taper p <= P (1 - e/B) (11)
     OUTPUT  ok, defects, cost (recomputed from the schedule alone), parts, fleet,
-            trace ... per bus, the points (seconds, kWh) where its energy changes
-            load .... {(site, slot): (buses charging, grid kW)}
+            trace ..... per bus, the points (seconds, kWh) where its energy changes
+            load ...... {(site, slot): (buses charging, grid kW)}
+            recovery .. per bus (return time s, energy kWh on return, energy the depot restores)
             Kinds: those of replay(), energy, overcharge, window, presence, power, site, plugs,
             grid, taper.
     The tariff (Data §3): 1 + rider multiplies energy, depot energy, demand and basic charges;
-    demand is the peak over the slots of [peak_from, peak_to) hours of the day.
+    demand is the peak over the slots of [peak_from, peak_to) hours of the day, wrapping across
+    midnight when peak_from > peak_to. An open site's meter carries its base load L all day: its
+    demand is at least L and L must fit its grid capacity, charging or not. The depot restores
+    each bus to s0 B overnight, max(0, s0 B - e) on return: nothing is bought back.
     """
     base = replay(c, duties, dict(speed=v["deadhead"]["speed"], detour=v["deadhead"]["detour"],
                                   layover=v["time"]["layover"]))
@@ -64,7 +75,7 @@ def replay_energy(c, v, duties, plan, infra, tol=1e-6, loss=False):
     rB, top, s0B, h = b["reserve"] * B, b["smax"] * B, b["s0"] * B, dl / 3600
     depot = dict(lat=v["depot"]["lat"], lon=v["depot"]["lon"])
     site = {stop: s for s, d in v["sites"].items() for stop in d["stops"]}
-    use, km_dh, kwh, restore, trace = {}, 0.0, 0.0, 0.0, []
+    use, km_dh, kwh, restore, trace, recovery = {}, 0.0, 0.0, 0.0, [], []
     for d in duties:
         if any(k not in T for k in d):
             continue
@@ -111,11 +122,16 @@ def replay_energy(c, v, duties, plan, infra, tol=1e-6, loss=False):
             tr.append((here, e))
             if e < rB - tol:
                 D.append(("energy", f"after {k} the bus reaches its next stop with {e:.6g}"))
-        restore += (s0B - e) / eta
+        need = max(0.0, s0B - e)                       # restored overnight, never sold back
+        restore += need / eta
+        recovery.append((here, e, need))
         trace.append(tr)
     rho = 1 + co.get("rider", 0.0)                   # rate riders on every electricity charge
     w0, w1 = 3600 * co.get("peak_from", 0.0), 3600 * co.get("peak_to", 24.0)
-    peak = {s: v["sites"][s]["L"] for s in infra}
+    peak = {s: v["sites"][s]["L"] for s in infra}    # the meter's base load, all day
+    for s in infra:
+        if v["sites"][s]["L"] > v["sites"][s]["G0"] + infra[s]["h"] + tol:
+            D.append(("grid", f"{s}: base load {v['sites'][s]['L']:.6g} kW over capacity"))
     for (s, s_), (k, kw) in sorted(use.items(), key=lambda z: (str(z[0][0]), z[0][1])):
         if s not in infra:
             continue
@@ -124,7 +140,7 @@ def replay_energy(c, v, duties, plan, infra, tol=1e-6, loss=False):
             D.append(("plugs", f"{s} slot {s_}: {k} > {infra[s]['n']}"))
         if L + kw > v["sites"][s]["G0"] + infra[s]["h"] + tol:
             D.append(("grid", f"{s} slot {s_}: {L + kw:.6g} kW"))
-        if w0 <= s_ * dl % 86400 < w1:                 # billing demand counts in its window
+        if billed(s_ * dl, w0, w1):                    # billing demand counts in its window
             peak[s] = max(peak[s], L + kw)
     parts = dict(buses=co["F"] * len(duties), deadhead=co["deadhead"] * km_dh,
                  energy=rho * co["energy"] * kwh, depot_energy=rho * co["depot_energy"] * restore,
@@ -134,4 +150,4 @@ def replay_energy(c, v, duties, plan, infra, tol=1e-6, loss=False):
                  peak=rho * co["peak"] * sum(peak.values()),
                  **({"basic": rho * co["basic"] * len(infra)} if "basic" in co else {}))
     return dict(ok=not D, defects=D, cost=sum(parts.values()), parts=parts, fleet=len(duties),
-                trace=trace, load={k: tuple(u) for k, u in use.items()})
+                trace=trace, load={k: tuple(u) for k, u in use.items()}, recovery=recovery)

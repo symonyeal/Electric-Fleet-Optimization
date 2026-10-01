@@ -9,7 +9,8 @@ and the exact least reduced cost cbar* over the ng-route set,
     z_LP >= sum_i pi_i + n min(0, cbar*)                                          (R2.2)
 (Lagrangean duality, BT §11.4, with the redundant row sum lam <= n). The bound needs exact
 pricing, not an exact master; duals come from methods/ipm.py stopped at gap delta, or from the
-simplex method of HiGHS.
+simplex method of HiGHS. A pricing call stopped by its time limit is not exact and updates
+nothing.
 """
 
 import heapq
@@ -21,10 +22,12 @@ import numpy as np
 import scipy.sparse as sp
 from scipy.optimize import Bounds, LinearConstraint, linprog, milp
 
-from checks.certificate import provenance, record
+from checks.certificate import digest, gap_state, provenance, record
 from checks.route import replay
 from methods.ipm import ipm, standard
 from models.paths import paths
+
+VERSION = "R2/1"
 
 
 def ng_sets(p, nu=8):
@@ -135,8 +138,10 @@ def from_routes(p, routes):
     return cols
 
 
-def master(p, cols, duals, delta):
-    """Solve (R2.1) over the columns. OUTPUT f (master objective), pi (duals over nodes), lam."""
+def master(p, cols, duals, delta, time_limit=math.inf):
+    """Solve (R2.1) over the columns within time_limit seconds. OUTPUT f (master objective), pi
+    (duals over nodes), lam, status. Any pi gives a valid bound (R2.2) after exact pricing, so a
+    master stopped at its limit still supplies duals."""
     I, m = p["I"], len(cols)
     pos = {i: k for k, i in enumerate(I)}
     r, c = zip(*[(pos[i], k) for k, col in enumerate(cols) for i in col["visits"]])
@@ -145,10 +150,13 @@ def master(p, cols, duals, delta):
     cost = np.array([col["cost"] for col in cols])
     pi = np.zeros(len(p["X"]))
     if duals == "simplex":
-        h = linprog(cost, A_eq=A, b_eq=np.ones(len(I)), bounds=(0, None), method="highs-ds")
+        h = linprog(cost, A_eq=A, b_eq=np.ones(len(I)), bounds=(0, None), method="highs-ds",
+                    options=dict(time_limit=max(time_limit, 1e-3)))
+        if h.status != 0 or h.eqlin is None:
+            return math.inf, pi, None, "limit" if h.status == 1 else "numerical"
         pi[I] = h.eqlin.marginals
-        return h.fun, pi, h.x, "optimal" if h.status == 0 else "numerical"
-    s = ipm(*standard(cost, A_eq=A, b_eq=np.ones(len(I))), delta=delta)
+        return h.fun, pi, h.x, "optimal"
+    s = ipm(*standard(cost, A_eq=A, b_eq=np.ones(len(I))), delta=delta, time_limit=time_limit)
     if s["x"] is None:
         return math.inf, pi, None, s["status"]
     pi[I] = s["y"][:len(I)]
@@ -156,31 +164,42 @@ def master(p, cols, duals, delta):
 
 
 def colgen(p, duals="ipm", nu=8, eps=1e-6, delta_max=0.1, delta_min=1e-9, D=10.0, add=20,
-           labels=10, init_routes=(), max_iter=1000, time_limit=3600.0, price_limit=600.0):
+           labels=10, init_routes=(), max_iter=1000, time_limit=3600.0, price_limit=600.0,
+           milp_limit=None):
     """Column generation for (R2.1) with bound (R2.2), and the restricted master as a MILP.
 
     Heuristic pricing (labels per node capped) runs first; exact pricing runs when it finds
     nothing, and only exact pricing updates the bound L. With interior duals the master is
     stopped at relative gap delta_k, delta_{k+1} = max(delta_min, min(delta_max, gap_k / D)),
-    gap_k = (f_k - L) / (1 + |f_k|) (the form of Gondzio, González-Brevis and Munari's rule;
+    gap_k = (f_k - L) / (1 + |f_k|) (the form of Gondzio, Gonzalez-Brevis and Munari's rule;
     the parameters here are this project's). Stops when gap_k <= eps after exact pricing
     found no negative column.
+
+    One deadline, time_limit seconds from the call, covers the run. The restricted MILP is given
+    milp_limit seconds (default the lesser of 300 s and a tenth of time_limit), reserved from
+    the start; every master and pricing call before it gets at most the time left to the
+    deadline less that reserve, and exact pricing at most price_limit of it. The record keeps
+    the requested budget and the time actually spent.
     """
+    t0 = time.perf_counter()
+    milp_limit = min(300.0, 0.1 * time_limit) if milp_limit is None else milp_limit
+    left = lambda: max(0.0, time_limit - milp_limit - (time.perf_counter() - t0))
     P, ng, n = paths(p), ng_sets(p, nu), len(p["I"])
     cols = initial(p, P) + from_routes(p, init_routes)
     keys = {tuple(c["nodes"]) for c in cols}
-    L, delta, traj, calls, exact_calls, t0 = -math.inf, delta_max, [], 0, 0, time.perf_counter()
+    L, delta, traj, calls, exact_calls = -math.inf, delta_max, [], 0, 0
     converged, f = False, math.inf
     for k in range(1, max_iter + 1):
-        if time.perf_counter() - t0 > time_limit:
+        if left() <= 0:
             break
-        f, pi, _, st = master(p, cols, duals, delta if duals == "ipm" else None)
-        _, new, _ = price(p, P, pi, ng, labels=labels)
+        f, pi, _, st = master(p, cols, duals, delta if duals == "ipm" else None,
+                              time_limit=left())
+        _, new, _ = price(p, P, pi, ng, labels=labels, time_limit=left())
         calls += 1
         fresh = [c for c in new if tuple(c["nodes"]) not in keys]
         exact = False
-        if not fresh:
-            cb, new, exact = price(p, P, pi, ng, time_limit=price_limit)
+        if not fresh and left() > 0:
+            cb, new, exact = price(p, P, pi, ng, time_limit=min(price_limit, left()))
             calls += 1
             exact_calls += 1
             if exact:
@@ -198,16 +217,29 @@ def colgen(p, duals="ipm", nu=8, eps=1e-6, delta_max=0.1, delta_min=1e-9, D=10.0
         if duals == "ipm":                         # no new column: the master was too loose
             d = delta / 10 if exact and not fresh else delta_max
             delta = max(delta_min, min(d, gap / D) if math.isfinite(gap) else d)
-    U, routes, rp = restricted_milp(p, cols)
+    rest = time_limit - (time.perf_counter() - t0)
+    U, routes, rp = (restricted_milp(p, cols, time_limit=rest) if rest > 0
+                     else (None, None, None))
     Lf = L if math.isfinite(L) else None
-    st = ("optimal" if U is not None and Lf is not None and U - Lf <= 1e-6 * (1 + abs(U))
+    g = gap_state(U, Lf)
+    st = ("optimal" if g == "closed" else "numerical" if g == "crossed"
           else "feasible_limit" if U is not None else "no_incumbent")
-    return record("R2", p["name"], st,
-                  U=U, L=L if math.isfinite(L) else None,
+    elapsed = time.perf_counter() - t0
+    return record("R2", p["name"], st, U=U, L=Lf,
+                  validation="replayed" if U is not None else
+                  "validation_failed" if rp else "not_available",
+                  bound_source="r22_exact_pricing",
                   solver=dict(code=None, message="converged" if converged else "limit"),
-                  elapsed=time.perf_counter() - t0,
+                  elapsed=elapsed,
                   provenance=provenance(p, duals=duals, nu=nu, eps=eps, delta_max=delta_max,
-                                        delta_min=delta_min, D=D, labels=labels),
+                                        delta_min=delta_min, D=D, labels=labels, add=add,
+                                        max_iter=max_iter, time_limit=time_limit,
+                                        price_limit=price_limit, milp_limit=milp_limit,
+                                        init_routes=len(init_routes),
+                                        init_digest=digest(list(init_routes)),
+                                        formulation=VERSION),
+                  time_budget=dict(requested=time_limit, loop=time_limit - milp_limit,
+                                   milp=milp_limit, spent=elapsed),
                   converged=converged, lp=f, iterations=len(traj), pricing=calls,
                   exact_pricing=exact_calls, columns=len(cols), trajectory=traj,
                   routes=routes, replay=rp)
