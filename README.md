@@ -1,4 +1,4 @@
-# Electric Fleet Model
+# Electric Fleet Optimization
 
 Reproducible models for electric-fleet routing, vehicle blocking, and charging planning.
 Each reported outcome carries a feasible upper bound, a valid lower bound, and an

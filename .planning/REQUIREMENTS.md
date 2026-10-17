@@ -1,4 +1,4 @@
-# Requirements: Electric Fleet Model
+# Requirements: Electric Fleet Optimization
 
 **Defined:** 2026-09-28
 **Core Value:** Every reported number is certified: a replayed feasible solution and a valid lower bound, with the gap stated, or an explicit status saying why not.

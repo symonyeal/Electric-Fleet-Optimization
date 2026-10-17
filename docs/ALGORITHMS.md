@@ -324,7 +324,7 @@ structure. Cache graph and linear rows; warm-start continuous variables after
 fixing integers; release a small neighborhood of bus paths only as a clearly
 labeled incumbent heuristic. Add Benders or Lagrangian decomposition only after
 a measured bottleneck and an explicit valid cut/bound derivation. The reference
-Electricity-Market-Model's decomposition style motivates certificates, not a
+Electricity-Clearing-and-Pricing's decomposition style motivates certificates, not a
 requirement to reproduce every algorithm in that repository.
 
 **8. Result contract**
