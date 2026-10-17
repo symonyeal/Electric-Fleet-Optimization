@@ -26,7 +26,7 @@ status: complete
 **`record()` states U, L and a gap only when both bounds are finite, and flags a negative gap as a defect.**
 
 ## Accomplishments
-- Packaging mirrors Electricity-Market-Model; CI runs pytest (not data, not slow), ruff, pip check on 3.14.
+- Packaging mirrors Electricity-Clearing-and-Pricing; CI runs pytest (not data, not slow), ruff, pip check on 3.14.
 - Five tests pin the status set, the missing-bound rule, the certification rule and the negative-gap flag.
 
 ## Task Commits

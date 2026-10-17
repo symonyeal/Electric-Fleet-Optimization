@@ -1,4 +1,4 @@
-# Electric Fleet Model
+# Electric Fleet Optimization
 
 ## What This Is
 
@@ -49,7 +49,7 @@ lower bound, with the gap stated, or an explicit status saying why not.
   numbers (R1.3, A3, (10), ...) used in requirements refer to them.
 - Mathematical basis: Vanderbei, *Linear Programming*, 4th ed. (2014), and Beck,
   *Introduction to Nonlinear Optimization* (2014), from the user's local PDFs.
-- Style reference: the user's Electricity-Market-Model (exact models, independent
+- Style reference: the user's Electricity-Clearing-and-Pricing (exact models, independent
   formulations, published cases, certificates, provenance).
 - evrp-python (commit 16d3499) supplies instance files and a heuristic baseline.
   Its validator, fleet rule, and README table have documented defects
@@ -77,7 +77,7 @@ lower bound, with the gap stated, or an explicit status saying why not.
 | R1 on a station-path multigraph, R1-TR only for checks | Report formulation needs 2n copies per station (336 nodes for E-n22-k4) and is infeasible as written at the depot | — Pending |
 | Free fleet; no separate vehicle-cap model | The report defines VEHICLES as a minimum; evrp-python caps vehicles that may make several trips, which restricts nothing without time | — Pending |
 | Own primal-dual IPM for column generation duals | Early-terminated interior duals are the tested claim; SciPy may not expose pre-crossover duals (Phase 1 check) | — Pending |
-| Rename from Transit-Fleet-Model to Electric-Fleet-Model | The project now covers routing as well as transit | ✓ Good |
+| Rename from Transit-Fleet-Model to Electric-Fleet-Optimization | The project now covers routing as well as transit | ✓ Good |
 | Fetch benchmark files instead of committing them | The set states no license; citation requested | — Pending |
 
 ## Evolution

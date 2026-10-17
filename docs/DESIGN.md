@@ -6,7 +6,7 @@ increment bounded?
 
 **1. Decision**
 
-Build **Electric-Fleet-Model**: exact models for electric-vehicle routing and
+Build **Electric-Fleet-Optimization**: exact models for electric-vehicle routing and
 electric-bus scheduling with charging, each solved with a bound attached. Two
 applications share one certificate core.
 
@@ -64,7 +64,7 @@ as M0 and M1.
 
 **3. Relationship to the reference repositories**
 
-The local Electricity-Market-Model was inspected at HEAD
+The local Electricity-Clearing-and-Pricing was inspected at HEAD
 `40a59a1a64b7c3b339e736229bb105baacc54daf`. Its working tree also contained
 pre-existing edits in `docs/DECISIONS.md` and `docs/SOURCES.md`; neither was
 changed. Its README, working contract, and decomposition document served as
