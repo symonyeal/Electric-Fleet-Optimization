@@ -1,5 +1,32 @@
 # Electric Fleet Optimization
 
+## In plain terms
+
+Electric delivery vans and buses have limited range. A plan must decide who goes where, and
+also when and where each vehicle recharges. These are hard puzzles, because the number of
+possible plans explodes as the fleet grows. Most planning software returns a good plan
+without saying how far it might be from the best one. This project gives both: a plan, and
+a proof of how much better any plan could possibly be.
+
+It works on two real problems:
+
+- **Delivery routes.** A 2020 research competition (IEEE WCCI) published seven test
+  puzzles for electric delivery routing. Its best-known answers were never proven to be the
+  best. For one puzzle, this project found a shorter route than the published one and
+  proved that no route can be more than 1.8% shorter. For a second, the best possible
+  length is pinned down to within 8.1%. The other five are still open.
+- **City buses.** Using TransLink's published timetable for Vancouver's Route 100
+  (219 trips a day), it works out how many buses and chargers the timetable needs. Ignoring
+  battery limits, 16 buses could cover it. The full-day answer with real batteries and
+  BC Hydro electricity prices has not yet been computed.
+
+**What this does not show.** The problems are simplified: one depot, identical vehicles,
+no driver shifts, no delivery time windows. It is not TransLink's operating plan.
+
+The rest of this page is written for specialists.
+
+## Overview
+
 Reproducible models for electric-fleet routing, vehicle blocking, and charging planning.
 Each reported outcome carries a feasible upper bound, a valid lower bound, and an
 independent check, separating an operating insight from an untested assumption.
