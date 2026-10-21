@@ -251,6 +251,13 @@ and 8): plain R2 leaves a gap to z* on four. With the cuts the gap closes on thr
 and on the fourth (seed 5, n = 6) the bound rises from 404.39 to 410.44 against
 z* = 420.82. The bound never exceeds z*.
 
+On the 2019 E instances (bundles at revision 2533ebe, 1,800 s each), R2-RCC
+certifies E-n22-k4 at 384.678093 (22 cuts, 34 s) and E-n23-k3 at 571.947383
+(11 cuts, 505 s), and brackets E-n30-k3 at [508.498041, 509.470415], 0.19%
+(12 cuts, at the limit). Without cuts the gaps were open, 1.79% and 8.09%. On
+E-n33-k4 no exact pricing call completed, so no cut was separated and no bound
+was reported. There the bottleneck is pricing, not the relaxation.
+
 **6. R3: partial recharging with resistive loss (convex MINLP)**
 
 In the report, charging is instantaneous, free and full, so energy has no price

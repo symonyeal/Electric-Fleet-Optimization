@@ -6,14 +6,14 @@ Status fields follow the result contract of [Algorithms](../ALGORITHMS.md) §8: 
 
 ## 2019 E instances (Validation §3, EVRP-06)
 
-L is the best admitted lower bound (R1 and R2, and R0's, since z(R0) <= z(R1)); U the shortest replayed solution (R1, R2's restricted master, GSGA). evrp-python's README values are not replayed. The last columns count segments of U's routes that pass two or more stations in a row (Routing §4), and name the code revisions of the admitted bundles.
+L is the best admitted lower bound (R1, R2 and R2-RCC, and R0's, since z(R0) <= z(R1)); U the shortest replayed solution (R1, R2's and R2-RCC's restricted masters, GSGA). evrp-python's README values are not replayed. The last columns count segments of U's routes that pass two or more stations in a row (Routing §4), and name the code revisions of the admitted bundles.
 
 | Instance | Report value | evrp-python (README) | GSGA replayed | R0 | L | U | Gap | Verdict | Multi-station segments | Revisions |
 |---|---:|---:|---:|---:|---:|---:|---:|---|---:|---|
-| E-n22-k4 | 384.678035 | 384.67 | 384.678093 | - | - | 384.678093 | - | open | 0 | - |
-| E-n23-k3 | 573.130948 | 571.94 | 571.947383 | - | 561.717857 | 571.947383 | 1.789% | bracketed; report value not optimal | 0 | 9c00dc3 |
-| E-n30-k3 | 511.253921 | 509.47 | - | - | 484.567748 | 527.204910 | 8.087% | bracketed | 0 | 9c00dc3 |
-| E-n33-k4 | 869.892175 | 840.14 | - | - | 662.122481 | - | - | open | - | 474149b |
+| E-n22-k4 | 384.678035 | 384.67 | 384.678093 | - | 384.678093 | 384.678093 | 0.000% | certified optimal | 0 | 2533ebe |
+| E-n23-k3 | 573.130948 | 571.94 | 571.947383 | - | 571.947383 | 571.947383 | 0.000% | certified optimal; report value not optimal | 0 | 2533ebe, 9c00dc3 |
+| E-n30-k3 | 511.253921 | 509.47 | - | - | 508.498041 | 509.470415 | 0.191% | bracketed; report value not optimal | 0 | 2533ebe, 9c00dc3 |
+| E-n33-k4 | 869.892175 | 840.14 | - | - | 662.122481 | 1,474.752011 | 55.103% | bracketed | 0 | 2533ebe, 474149b |
 | E-n51-k5 | 570.170703 | 529.90 | - | - | - | - | - | open | - | - |
 | E-n76-k7 | 723.367517 | 692.64 | - | - | - | - | - | open | - | - |
 | E-n101-k8 | 899.885589 | 839.29 | - | - | - | - | - | open | - | - |
