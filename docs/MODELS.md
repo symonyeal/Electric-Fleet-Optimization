@@ -161,6 +161,20 @@ Load at an existing meter that is billed whether or not the site opens is the ot
 it would drop y_s from both rows and add its demand charge as a constant. The two readings
 are not mixed.
 
+The plug link in (5) is aggregated: in the LP relaxation it gives only
+y_s ≥ Σ_k u_kst / n̄_s. CMIP (Roni, Yi and Smart, 2019), which assigns EV charging
+events to fast-charger sites, links each assignment to its site instead,
+x_a ≤ z_s, the facility-location form whose relaxation is tighter. Here that reads
+u_kst ≤ y_s, valid because u_kst = 1 forces n_s ≥ 1 and hence y_s = 1. The rows are
+not adopted. Measured 2026-10-20 at revision 2533ebe (M1/2, HiGHS 600-900 s
+limits, two runs on a shared processor): the root LP is unchanged in both windows,
+6972.901 before 08:00 and 6955.402 before 10:00, because the LP optimum already
+opens both loops. Before 08:00 both variants certify 7046.570, in 283,196 and
+147,663 nodes. Before 10:00 both stop at the limit with U = 7123.651 and
+L = 7063.115 and 7063.706. One halved node count lies within HiGHS's run-to-run
+variability, so it is no evidence. The rows matter only when candidate sites
+outnumber the sites the LP must open.
+
 The initial case assumes a shared controllable charger bank at each site and
 identical plugs there. A connection may change at an interval boundary. With
 zero connection time this is an explicit idealization. To model one full slot of
