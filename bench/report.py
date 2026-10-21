@@ -33,8 +33,9 @@ def results(D):
           "replay accepted the returned solution, `certificate_status` whether U and L agree "
           "within tolerance; the public `status` is `optimal` only when certified."), "",
          "## 2019 E instances (Validation §3, EVRP-06)", "",
-         ("L is the best admitted lower bound (R1 and R2, and R0's, since z(R0) <= z(R1)); U "
-          "the shortest replayed solution (R1, R2's restricted master, GSGA). evrp-python's "
+         ("L is the best admitted lower bound (R1, R2 and R2-RCC, and R0's, since "
+          "z(R0) <= z(R1)); U the shortest replayed solution (R1, R2's and R2-RCC's restricted "
+          "masters, GSGA). evrp-python's "
           "README values are not replayed. The last columns count segments of U's routes that "
           "pass two or more stations in a row (Routing §4), and name the code revisions of the "
           "admitted bundles."), "",
