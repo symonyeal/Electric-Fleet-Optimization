@@ -1,6 +1,7 @@
 """One instance, one model, one result bundle.
 
     python run_case.py evrp E-n22-k4 R1 [--time 600]      R0 | R1 | R1-TR | R2-ipm | R2-simplex
+                                                          | R2-rcc
     python run_case.py transit route100 M1 [--until 8] [--time 600] [--scenario rs1640]   M0 | M1
 
 The (track, model) pair is checked before any data is read. Writes the schema-2 bundle of
@@ -43,13 +44,13 @@ def load_transit(instance, scenario, until):
     return c, v
 
 
-def r2(p, duals, time_limit):
+def r2(p, duals, time_limit, rcc=False):
     """R2 seeded with every replayed baseline route on disk for the instance."""
     from checks.route import read_routes, replay
     from models.colgen import colgen
     init = [r for f in sorted(Path("docs/results/baseline").glob(f"{p['name']}-*.routes"))
             if replay(p, R := read_routes(f))["ok"] for r in R]
-    return colgen(p, duals=duals, init_routes=init, time_limit=time_limit)
+    return colgen(p, duals=duals, init_routes=init, time_limit=time_limit, rcc=rcc)
 
 
 def solve(x, name):
@@ -59,7 +60,8 @@ def solve(x, name):
         p = load_evrp(x.instance)
         f = {"R0": r0, "R1": r1, "R1-TR": r1tr,
              "R2-ipm": lambda p, time_limit: r2(p, "ipm", time_limit),
-             "R2-simplex": lambda p, time_limit: r2(p, "simplex", time_limit)}[x.model]
+             "R2-simplex": lambda p, time_limit: r2(p, "simplex", time_limit),
+             "R2-rcc": lambda p, time_limit: r2(p, "simplex", time_limit, rcc=True)}[x.model]
         return f(p, time_limit=x.time)
     c, v = load_transit(x.instance, x.scenario, x.until)
     if x.model == "M0":

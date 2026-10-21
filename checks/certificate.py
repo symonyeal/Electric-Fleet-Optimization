@@ -92,7 +92,8 @@ def record(model, instance, status, U=None, L=None, *, solver, elapsed, provenan
                            not_available
             objective .... the model's own objective at the returned solution; it must agree
                            with the replayed U within tol, or the record is validation_failed
-            bound_source . what produced L (highs_dual, r22_exact_pricing, oa_master_dual, ...)
+            bound_source . what produced L (highs_dual, r22_exact_pricing, r24_exact_pricing,
+                           oa_master_dual, ...)
             solver ....... the solver's own code and message
             elapsed ...... seconds; provenance: revision, data checksums, parameters
             kw ........... decisions, residuals
