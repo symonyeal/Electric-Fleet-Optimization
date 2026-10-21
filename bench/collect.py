@@ -91,7 +91,7 @@ def routing(out, man, excluded):
     rows, duals = [], []
     for n in cases.E:
         recs = {m: load(case("evrp", n, m), out, man, excluded)
-                for m in ("R0", "R1", "R2-ipm", "R2-simplex")}
+                for m in ("R0", "R1", "R2-ipm", "R2-simplex", "R2-rcc")}
         p = load_evrp(f"evrp-2019/{n}")
         got = replayed_routes(p, out, n)
         lower = [r["L"] for r in recs.values() if r and r.get("L") is not None

@@ -45,12 +45,13 @@ MANIFEST = "MIGRATION.json"
 def formulations():
     """model -> formulation version, read from the model modules."""
     from models.charge import VERSION as M2
-    from models.colgen import VERSION as R2
+    from models.colgen import RCC, VERSION as R2
     from models.fleet import VERSION as M1
     from models.network import VERSION as M0
     from models.recharge import VERSION as R3
     from models.route import VERSION as R
-    return {**R, "R2-ipm": R2, "R2-simplex": R2, "M0": M0, "M1": M1, "M2": M2, "R3": R3}
+    return {**R, "R2-ipm": R2, "R2-simplex": R2, "R2-rcc": RCC, "M0": M0, "M1": M1, "M2": M2,
+            "R3": R3}
 
 
 def sha256(path):

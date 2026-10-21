@@ -10,7 +10,7 @@ every published verdict.
 
 from checks.certificate import gap_state
 
-TRUSTED = {"highs_dual", "r22_exact_pricing", "oa_master_dual", "matching"}
+TRUSTED = {"highs_dual", "r22_exact_pricing", "r24_exact_pricing", "oa_master_dual", "matching"}
 
 
 def evrp(report, lower, upper, eps=1e-6):

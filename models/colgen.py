@@ -11,6 +11,16 @@ and the exact least reduced cost cbar* over the ng-route set,
 pricing, not an exact master; duals come from methods/ipm.py stopped at gap delta, or from the
 simplex method of HiGHS. A pricing call stopped by its time limit is not exact and updates
 nothing.
+
+R2-RCC (Routing §5a) adds rounded capacity inequalities (Laporte, Nobert and Desrochers 1985),
+in the entry form of robust branch-cut-and-price (Fukasawa et al. 2006): for S within I,
+    sum_r beta_S(r) lam_r >= kappa(S) = ceil(b(S) / C),                            (R2.3)
+beta_S(r) the number of arcs (u, v) of r's customer sequence with u not in S and v in S. Every
+partition into feasible elementary routes satisfies (R2.3), since each route serving S enters it,
+so z_LP(R2.1, R2.3) <= z*. With multipliers sigma >= 0 the reduced cost becomes
+cbar_r = c_r - sum_i a_ir pi_i - sum_S sigma_S beta_S(r): a cost w_uv = sum sigma_S on each arc
+entering S, so labeling and its dominance are unchanged, and
+    z_LP(R2.1, R2.3) >= sum_i pi_i + sum_S sigma_S kappa(S) + n min(0, cbar*).     (R2.4)
 """
 
 import heapq
@@ -28,6 +38,7 @@ from methods.ipm import ipm, standard
 from models.paths import paths
 
 VERSION = "R2/1"
+RCC = "R2-RCC/1"
 
 
 def ng_sets(p, nu=8):
@@ -37,12 +48,13 @@ def ng_sets(p, nu=8):
     return {i: sum(1 << pos[j] for j in sorted(I, key=lambda j: D[i, j])[:nu]) for i in I}
 
 
-def price(p, P, pi, ng, labels=None, time_limit=math.inf, tol=1e-9):
+def price(p, P, pi, ng, labels=None, time_limit=math.inf, tol=1e-9, W=None):
     """Least reduced-cost ng-routes by labeling on the station-path multigraph.
 
     A label at node i is (cbar, q, y, M): reduced cost, load, charge on leaving i, ng-memory.
     Extending along p in P_ij needs y >= a_p and, at a customer j, j not in M and q + b_j <= C;
-    then y' = y - e_ij (direct) or Q - w_p, cbar' = cbar + l_p - pi_j, M' = (M & N_j) | {j}.
+    then y' = y - e_ij (direct) or Q - w_p, cbar' = cbar + l_p - pi_j - W_ij, M' = (M & N_j) | {j}.
+    W is the arc dual of (R2.4), zero when absent.
     L1 dominates L2 at the same node if cbar1 <= cbar2, q1 <= q2, y1 >= y2 and M1 within M2.
     Labels are processed in order of load, which grows along every extension.
 
@@ -79,7 +91,8 @@ def price(p, P, pi, ng, labels=None, time_limit=math.inf, tol=1e-9):
                 continue
             if M >> pos[j] & 1 or q + b[j] > C + tol:
                 continue
-            new = (cb + l - pi[j], q + b[j], y - a if len(nodes) == 2 else Q - w,
+            new = (cb + l - pi[j] - (0.0 if W is None else W[i, j]), q + b[j],
+                   y - a if len(nodes) == 2 else Q - w,
                    (M & ng[j]) | (1 << pos[j]), k, path, j)
             if any(lab[m][0] <= new[0] + tol and lab[m][1] <= new[1] + tol and
                    lab[m][2] >= new[2] - tol and not lab[m][3] & ~new[3] for m in at[j]):
@@ -138,9 +151,30 @@ def from_routes(p, routes):
     return cols
 
 
-def master(p, cols, duals, delta, time_limit=math.inf):
-    """Solve (R2.1) over the columns within time_limit seconds. OUTPUT f (master objective), pi
-    (duals over nodes), lam, status. Any pi gives a valid bound (R2.2) after exact pricing, so a
+def seq(p, col):
+    """A column's customer sequence 0, visits, 0: the arcs (R2.3) counts."""
+    return [p["depot"], *col["visits"], p["depot"]]
+
+
+def beta(p, S, col):
+    """beta_S(r): arcs of r entering S."""
+    return sum(u not in S and v in S for u, v in itertools.pairwise(seq(p, col)))
+
+
+def arc_duals(p, cuts, sigma):
+    """W_uv = sum of sigma_S over the cuts S that (u, v) enters."""
+    W = np.zeros((len(p["X"]),) * 2)
+    for (S, _), s in zip(cuts, sigma):
+        e = np.zeros(len(p["X"]))
+        e[list(S)] = 1
+        W += s * np.outer(1 - e, e)
+    return W
+
+
+def master(p, cols, duals, delta, time_limit=math.inf, cuts=()):
+    """Solve (R2.1), with the rows (R2.3) of cuts = [(S, kappa)], over the columns within
+    time_limit seconds. OUTPUT f (master objective), pi (duals over nodes), lam, status, sigma
+    (cut duals, >= 0). Any pi and sigma >= 0 give a valid bound (R2.4) after exact pricing, so a
     master stopped at its limit still supplies duals."""
     I, m = p["I"], len(cols)
     pos = {i: k for k, i in enumerate(I)}
@@ -148,25 +182,64 @@ def master(p, cols, duals, delta, time_limit=math.inf):
     A = sp.csr_array((np.ones(len(r)), (r, c)), shape=(len(I), m))
     A.sum_duplicates()
     cost = np.array([col["cost"] for col in cols])
-    pi = np.zeros(len(p["X"]))
+    pi, sigma = np.zeros(len(p["X"])), np.zeros(len(cuts))
+    B = sp.csr_array(np.array([[beta(p, S, col) for col in cols] for S, _ in cuts], float)
+                     .reshape(len(cuts), m))
+    kappa = np.array([k for _, k in cuts], float)
+    ub = dict(A_ub=-B, b_ub=-kappa) if cuts else {}
     if duals == "simplex":
         h = linprog(cost, A_eq=A, b_eq=np.ones(len(I)), bounds=(0, None), method="highs-ds",
-                    options=dict(time_limit=max(time_limit, 1e-3)))
+                    options=dict(time_limit=max(time_limit, 1e-3)), **ub)
         if h.status != 0 or h.eqlin is None:
-            return math.inf, pi, None, "limit" if h.status == 1 else "numerical"
+            return math.inf, pi, None, "limit" if h.status == 1 else "numerical", sigma
         pi[I] = h.eqlin.marginals
-        return h.fun, pi, h.x, "optimal"
-    s = ipm(*standard(cost, A_eq=A, b_eq=np.ones(len(I))), delta=delta, time_limit=time_limit)
+        if cuts:
+            sigma = np.maximum(0.0, -h.ineqlin.marginals)
+        return h.fun, pi, h.x, "optimal", sigma
+    s = ipm(*standard(cost, A_eq=A, b_eq=np.ones(len(I)), **ub), delta=delta,
+            time_limit=time_limit)
     if s["x"] is None:
-        return math.inf, pi, None, s["status"]
+        return math.inf, pi, None, s["status"], sigma
     pi[I] = s["y"][:len(I)]
-    return s["f"], pi, s["x"][:m], s["status"]
+    sigma = np.maximum(0.0, -s["y"][len(I):len(I) + len(cuts)])      # slack row: y <= 0
+    return s["f"], pi, s["x"][:m], s["status"], sigma
+
+
+def separate(p, cols, lam, cuts, add=10, tol=1e-6):
+    """Violated (R2.3) by greedy growth (Lysgaard, Letchford and Eglese 2004, §4: the simplest of
+    their heuristics). x_uv = sum_r lam_r [(u, v) in r]; from each seed, S grows by the customer
+    with the largest flow to and from S, and each S met is tested: the flow entering S,
+    y(S) = sum_{u not in S, v in S} x_uv, against kappa(S). OUTPUT up to add new cuts, most
+    violated first. O(n^3) per call."""
+    I, b, C, X = p["I"], p["b"], p["C"], len(p["X"])
+    x = np.zeros((X, X))
+    for col, l in zip(cols, lam):
+        if l > tol:
+            for u, v in itertools.pairwise(seq(p, col)):
+                x[u, v] += l
+    w = x + x.T
+    old, found = {S for S, _ in cuts}, {}
+    for i in I:
+        S = [i]
+        while len(S) < len(I):
+            rest = [j for j in I if j not in S]
+            S.append(max(rest, key=lambda j: w[S, j].sum()))
+            F = frozenset(S)
+            k = math.ceil(b[S].sum() / C - tol)
+            e = np.ones(X, bool)
+            e[S] = False
+            v = k - x[np.ix_(e, S)].sum()
+            if v > tol and F not in old:
+                found[F] = (v, k)
+    return [(S, k) for S, (v, k) in sorted(found.items(), key=lambda t: -t[1][0])[:add]]
 
 
 def colgen(p, duals="ipm", nu=8, eps=1e-6, delta_max=0.1, delta_min=1e-9, D=10.0, add=20,
            labels=10, init_routes=(), max_iter=1000, time_limit=3600.0, price_limit=600.0,
-           milp_limit=None):
+           milp_limit=None, rcc=False):
     """Column generation for (R2.1) with bound (R2.2), and the restricted master as a MILP.
+    rcc=True is R2-RCC: at each convergence the master's point is separated for (R2.3), and
+    generation resumes with the cuts found, under bound (R2.4); it converges when none is.
 
     Heuristic pricing (labels per node capped) runs first; exact pricing runs when it finds
     nothing, and only exact pricing updates the bound L. With interior duals the master is
@@ -188,30 +261,36 @@ def colgen(p, duals="ipm", nu=8, eps=1e-6, delta_max=0.1, delta_min=1e-9, D=10.0
     cols = initial(p, P) + from_routes(p, init_routes)
     keys = {tuple(c["nodes"]) for c in cols}
     L, delta, traj, calls, exact_calls = -math.inf, delta_max, [], 0, 0
-    converged, f = False, math.inf
+    converged, f, cuts = False, math.inf, []
     for k in range(1, max_iter + 1):
         if left() <= 0:
             break
-        f, pi, _, st = master(p, cols, duals, delta if duals == "ipm" else None,
-                              time_limit=left())
-        _, new, _ = price(p, P, pi, ng, labels=labels, time_limit=left())
+        f, pi, lam, st, sigma = master(p, cols, duals, delta if duals == "ipm" else None,
+                                       time_limit=left(), cuts=cuts)
+        W = arc_duals(p, cuts, sigma) if cuts else None
+        _, new, _ = price(p, P, pi, ng, labels=labels, time_limit=left(), W=W)
         calls += 1
         fresh = [c for c in new if tuple(c["nodes"]) not in keys]
         exact = False
         if not fresh and left() > 0:
-            cb, new, exact = price(p, P, pi, ng, time_limit=min(price_limit, left()))
+            cb, new, exact = price(p, P, pi, ng, time_limit=min(price_limit, left()), W=W)
             calls += 1
             exact_calls += 1
-            if exact:
-                L = max(L, pi[p["I"]].sum() + n * min(0.0, cb))
+            if exact:                                                  # (R2.2), (R2.4)
+                L = max(L, pi[p["I"]].sum() + sigma @ np.array([k for _, k in cuts], float)
+                        + n * min(0.0, cb))
             fresh = [c for c in new if tuple(c["nodes"]) not in keys]
         for c in fresh[:add]:
             keys.add(tuple(c["nodes"]))
             cols.append(c)
         gap = (f - L) / (1 + abs(f)) if math.isfinite(L) else math.inf
+        cut = separate(p, cols[:len(lam)], lam, cuts) if (
+            rcc and exact and not fresh and gap <= eps and lam is not None) else []
         traj.append(dict(k=k, f=f, L=L if math.isfinite(L) else None, gap=gap, delta=delta,
-                         cols=len(cols), exact=exact, master=st, t=time.perf_counter() - t0))
-        if exact and not fresh and gap <= eps:
+                         cols=len(cols), exact=exact, master=st, t=time.perf_counter() - t0,
+                         **({"cuts": len(cuts) + len(cut)} if rcc else {})))
+        cuts += cut
+        if exact and not fresh and gap <= eps and not cut:
             converged = True
             break
         if duals == "ipm":                         # no new column: the master was too loose
@@ -228,7 +307,7 @@ def colgen(p, duals="ipm", nu=8, eps=1e-6, delta_max=0.1, delta_min=1e-9, D=10.0
     return record("R2", p["name"], st, U=U, L=Lf,
                   validation="replayed" if U is not None else
                   "validation_failed" if rp else "not_available",
-                  bound_source="r22_exact_pricing",
+                  bound_source="r24_exact_pricing" if rcc else "r22_exact_pricing",
                   solver=dict(code=None, message="converged" if converged else "limit"),
                   elapsed=elapsed,
                   provenance=provenance(p, duals=duals, nu=nu, eps=eps, delta_max=delta_max,
@@ -237,7 +316,10 @@ def colgen(p, duals="ipm", nu=8, eps=1e-6, delta_max=0.1, delta_min=1e-9, D=10.0
                                         price_limit=price_limit, milp_limit=milp_limit,
                                         init_routes=len(init_routes),
                                         init_digest=digest(list(init_routes)),
-                                        formulation=VERSION),
+                                        formulation=RCC if rcc else VERSION,
+                                        **({"rcc": True} if rcc else {})),
+                  **({"cuts": [dict(S=sorted(int(i) for i in S), kappa=k) for S, k in cuts]}
+                     if rcc else {}),
                   time_budget=dict(requested=time_limit, loop=time_limit - milp_limit,
                                    milp=milp_limit, spent=elapsed),
                   converged=converged, lp=f, iterations=len(traj), pricing=calls,

@@ -212,6 +212,45 @@ starting the transit model with branch-and-price. That advice stands: transit
 duty pricing with charging timing is a hard independent problem, whereas R2 prices
 the standard resource-constrained path with a battery reset at stations.
 
+**5a. R2-RCC: rounded capacity cuts in the master**
+
+The lifted MTZ row (R1.3) and the covering rows of (R2.1) both ignore that a set
+S of customers with demand b(S) needs at least ⌈b(S)/C⌉ vehicles. Let β_S(r) be
+the number of arcs (u, v) of route r's customer sequence 0, i_1, …, i_k, 0 with
+u ∉ S and v ∈ S. Each route that serves S enters it, so every partition of I
+into feasible elementary routes satisfies the rounded capacity inequality
+(Laporte, Nobert and Desrochers, 1985), in the entry form of Fukasawa et al.
+(2006):
+
+$$
+\sum_r\beta_S(r)\lambda_r\ \ge\ \kappa(S)=\lceil b(S)/C\rceil\qquad(S\subseteq I). \tag{R2.3}
+$$
+
+Hence z(R2.1, R2.3) ≤ z*, although an ng-route need not satisfy (R2.3). Stations
+are not in S, so a station path P_ij enters S exactly when the arc (i, j) does.
+With multipliers σ_S ≥ 0 the reduced cost is
+c̄_r = c_r − Σ_i a_ir π_i − Σ_S σ_S β_S(r), which is the reduced cost of §5 with
+the cost w_uv = Σ_{S: u∉S, v∈S} σ_S taken off each arc. The cut is robust: it
+changes arc costs only, so the labels and their dominance are unchanged. The
+argument for (R2.2) then gives, for every π and every σ ≥ 0,
+
+$$
+z_{LP}(\Omega';\ \text{R2.3})\ \ge\ \sum_{i\in I}\pi_i+\sum_S\sigma_S\kappa(S)+n\min\{0,\bar c^*\}. \tag{R2.4}
+$$
+
+Separation is greedy (Lysgaard, Letchford and Eglese, 2004, §4). Let
+x_uv = Σ_r λ_r [(u, v) ∈ r]. From each seed customer, S grows by the customer
+with the largest flow to and from S, and each S met is tested:
+y(S) = Σ_{u∉S, v∈S} x_uv < κ(S). The method is §5's general step with one
+addition: (f) when (e) holds, separate the master's point; if a cut is violated,
+add up to ten and return to (a). It runs with simplex duals, model `R2-rcc`,
+formulation `R2-RCC/1`.
+
+Measured 2026-10-20 on 16 random instances (`rand_instance`, seeds 0–7, n = 6
+and 8): plain R2 leaves a gap to z* on four. With the cuts the gap closes on three,
+and on the fourth (seed 5, n = 6) the bound rises from 404.39 to 410.44 against
+z* = 420.82. The bound never exceeds z*.
+
 **6. R3: partial recharging with resistive loss (convex MINLP)**
 
 In the report, charging is instantaneous, free and full, so energy has no price
@@ -308,6 +347,7 @@ R4 is deferred to v2 and is stated here only so that it is not mistaken for R3.
 | R1 | MILP | HiGHS dual bound; replayed incumbent | Optimal value of the report's EVRP, free fleet, within tolerance |
 | R1-TR | MILP | As R1 | Formulation check on sub-instances only |
 | R2 | LP by column generation | (R2.2) with exact pricing | Lower bound on R1 at every iteration |
+| R2-RCC | R2 with cuts (R2.3) | (R2.4) with exact pricing | Lower bound on R1 at every iteration; at least R2's LP at convergence |
 | R3 | Convex MINLP (MISOCP) | OA master dual bound | Global optimum under k <= 1 and declared parameters |
 | R3-P | MILP pair | Lower MILP dual bound | Bracket on R3 |
 

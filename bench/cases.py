@@ -11,7 +11,7 @@ from pathlib import Path
 
 OUT = Path("docs/results")
 E = ["E-n22-k4", "E-n23-k3", "E-n30-k3", "E-n33-k4", "E-n51-k5", "E-n76-k7", "E-n101-k8"]
-PAIRS = {"evrp": ("R0", "R1", "R1-TR", "R2-ipm", "R2-simplex"), "transit": ("M0", "M1")}
+PAIRS = {"evrp": ("R0", "R1", "R1-TR", "R2-ipm", "R2-simplex", "R2-rcc"), "transit": ("M0", "M1")}
 
 
 @dataclass(frozen=True)
@@ -41,7 +41,8 @@ class Case:
 
 
 CASES = [*[Case("evrp", n, m, t) for n in E for m, t in (("R0", 600), ("R1", 600),
-                                                          ("R2-ipm", 1800), ("R2-simplex", 1800))],
+                                                          ("R2-ipm", 1800), ("R2-simplex", 1800),
+                                                          ("R2-rcc", 1800))],
          *[Case("transit", "route100", m, t, until=u) for u, t in ((8.0, 600), (10.0, 900),
                                                                    (None, 1800))
            for m in ("M0", "M1")],
