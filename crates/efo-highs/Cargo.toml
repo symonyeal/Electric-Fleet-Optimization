@@ -1,0 +1,15 @@
+[package]
+name = "efo-highs"
+description = "HiGHS 1.12.0, built from source, behind the two calls SciPy makes: milp and linprog"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+links = "highs"
+exclude = ["HiGHS/check", "HiGHS/docs", "HiGHS/examples"]
+
+[build-dependencies]
+cmake.workspace = true
+
+[lints]
+workspace = true
