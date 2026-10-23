@@ -25,6 +25,7 @@ import platform
 import subprocess
 import sys
 from importlib.metadata import version
+from pathlib import Path
 
 SOLVER = {"optimal", "feasible_limit", "no_incumbent", "infeasible", "unbounded", "local",
           "numerical", "stall", "limit"}
@@ -164,6 +165,17 @@ def host():
         k = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE,
                            r"HARDWARE\DESCRIPTION\System\CentralProcessor\0")
         cpu = winreg.QueryValueEx(k, "ProcessorNameString")[0].strip()
+    elif not cpu:
+        # platform.processor() can be empty on Linux runners; record the hardware model.
+        try:
+            for ln in Path("/proc/cpuinfo").read_text(encoding="utf-8").splitlines():
+                k, _, v = ln.partition(":")
+                if k.strip() in {"model name", "Hardware"} and v.strip():
+                    cpu = v.strip()
+                    break
+        except OSError:
+            pass
+        cpu = cpu or f"not recorded ({platform.machine()})"
     return dict(cpu=cpu, threads=os.cpu_count(), python=platform.python_version(),
                 numpy=version("numpy"), scipy=version("scipy"))
 

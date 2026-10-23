@@ -112,3 +112,12 @@ def test_provenance_names_the_host():
     from checks.certificate import provenance
     h = provenance(dict(name="x"))["host"]
     assert h["cpu"] and h["threads"] >= 1 and h["python"] and h["numpy"] and h["scipy"]
+
+
+def test_host_on_linux_with_empty_processor(monkeypatch):
+    from checks import certificate as c
+    monkeypatch.setattr(c.sys, "platform", "linux")
+    monkeypatch.setattr(c.platform, "processor", lambda: "")
+    monkeypatch.setattr(c.Path, "read_text", lambda *a, **kw: "model name\t: Test CPU\n")
+    h = c.host()
+    assert h["cpu"] == "Test CPU" and h["threads"] >= 1
