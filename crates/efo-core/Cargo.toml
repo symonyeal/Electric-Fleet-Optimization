@@ -1,0 +1,18 @@
+[package]
+name = "efo-core"
+description = "Instances, scenarios, corridors, the result contract and Python-compatible JSON"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+efo-highs.workspace = true
+indexmap.workspace = true
+sha2.workspace = true
+toml.workspace = true
+csv.workspace = true
+zip.workspace = true
+
+[lints]
+workspace = true

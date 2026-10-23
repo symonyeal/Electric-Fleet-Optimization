@@ -54,6 +54,7 @@ it, then update the status).
 
 | Source | Used for | Status |
 | --- | --- | --- |
+| [HiGHS v1.12.0](https://github.com/ERGO-Code/HiGHS/tree/v1.12.0), commit `755a8e027a99a8d4ecf153a8dde4b2a767cdf384` | Native solver for the initial Rust libraries | Source pinned as a submodule; C API and MIT licence inspected 23 October 2026; full Python/Rust solver parity pending |
 | TransLink static GTFS, snapshot 26SEP_20260925 ([Data](DATA.md) §2) | Transit timetable | Inspected 29 September 2026: all files; counts and checksum recorded |
 | [TransLink GTFS Static Data terms](https://www.translink.ca/about-us/doing-business-with-translink/app-developer-resources/gtfs/gtfs-data) | Licence and attribution legend | Inspected 29 September 2026 (search summary of the page) |
 | [The Buzzer, May 2019](https://buzzer.translink.ca/2019/05/translinks-four-battery-electric-buses-are-here/); [Daily Hive](https://dailyhive.com/vancouver/translink-electric-battery-bus-route-100) | Route 100 as TransLink's battery-electric pilot, chargers at Marpole Loop and 22nd Street Station, 4-7 minute charges | Inspected 29 September 2026 (search summary) |

@@ -1,0 +1,42 @@
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"
+publish = false
+repository = "https://github.com/symonyeal/Electric-Fleet-Optimization"
+
+[workspace.dependencies]
+efo-highs = { path = "crates/efo-highs" }
+efo-core = { path = "crates/efo-core" }
+indexmap = "2.14"
+sha2 = "0.11"
+toml = { version = "1.1", features = ["preserve_order"] }
+csv = "1.4"
+zip = { version = "9.0", default-features = false, features = ["deflate"] }
+cmake = "0.1.58"
+
+[workspace.lints.rust]
+unsafe_op_in_unsafe_fn = "deny"
+
+[workspace.lints.clippy]
+# The code transcribes the documents' notation: single-letter and short symbols are deliberate.
+many_single_char_names = "allow"
+similar_names = "allow"
+too_many_arguments = "allow"
+needless_range_loop = "allow"
+type_complexity = "allow"
+
+[profile.release]
+debug = "line-tables-only"
+lto = "thin"
+
+# HiGHS is C++ built once per profile; optimise it even in test builds.
+[profile.dev.package.efo-highs]
+opt-level = 3
+
+[profile.test]
+opt-level = 2

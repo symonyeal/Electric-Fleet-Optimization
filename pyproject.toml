@@ -10,6 +10,7 @@ markers = [
 
 [tool.ruff]
 line-length = 100
+extend-exclude = ["crates/efo-highs/HiGHS"]
 
 [tool.ruff.lint]
 extend-select = ["E501"]
