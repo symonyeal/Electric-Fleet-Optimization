@@ -10,13 +10,13 @@ L is the best admitted lower bound (R1, R2 and R2-RCC, and R0's, since z(R0) <= 
 
 | Instance | Report value | evrp-python (README) | GSGA replayed | R0 | L | U | Gap | Verdict | Multi-station segments | Revisions |
 |---|---:|---:|---:|---:|---:|---:|---:|---|---:|---|
-| E-n22-k4 | 384.678035 | 384.67 | 384.678093 | - | 384.678093 | 384.678093 | 0.000% | certified optimal | 0 | 2533ebe |
-| E-n23-k3 | 573.130948 | 571.94 | 571.947383 | - | 571.947383 | 571.947383 | 0.000% | certified optimal; report value not optimal | 0 | 2533ebe, 9c00dc3 |
-| E-n30-k3 | 511.253921 | 509.47 | - | - | 508.498041 | 509.470415 | 0.191% | bracketed; report value not optimal | 0 | 2533ebe, 9c00dc3 |
-| E-n33-k4 | 869.892175 | 840.14 | - | - | 662.122481 | 1,474.752011 | 55.103% | bracketed | 0 | 2533ebe, 474149b |
-| E-n51-k5 | 570.170703 | 529.90 | - | - | - | - | - | open | - | - |
-| E-n76-k7 | 723.367517 | 692.64 | - | - | - | - | - | open | - | - |
-| E-n101-k8 | 899.885589 | 839.29 | - | - | - | - | - | open | - | - |
+| E-n22-k4 | 384.678035 | 384.67 | 384.678093 | - | 384.678093 | 384.678093 | 0.000% | certified optimal | 0 | 05b10dd |
+| E-n23-k3 | 573.130948 | 571.94 | 571.947383 | - | 571.947383 | 571.947383 | 0.000% | certified optimal; report value not optimal | 0 | 05b10dd, 9c00dc3 |
+| E-n30-k3 | 511.253921 | 509.47 | - | - | 509.470415 | 509.470415 | 0.000% | certified optimal; report value not optimal | 0 | 05b10dd, 9c00dc3 |
+| E-n33-k4 | 869.892175 | 840.14 | - | - | 840.145836 | 840.145836 | 0.000% | certified optimal; report value not optimal | 0 | 05b10dd, 474149b |
+| E-n51-k5 | 570.170703 | 529.90 | - | - | 527.546249 | 700.365456 | 24.676% | bracketed | 0 | 05b10dd |
+| E-n76-k7 | 723.367517 | 692.64 | - | - | 681.374346 | 949.652987 | 28.250% | bracketed | 0 | 05b10dd |
+| E-n101-k8 | 899.885589 | 839.29 | - | - | 822.793692 | 1,236.768579 | 33.472% | bracketed | 0 | 05b10dd |
 
 ## Interior versus simplex duals in R2 (CG-04)
 
