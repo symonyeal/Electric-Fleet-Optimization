@@ -40,24 +40,21 @@ verdict. GitHub Actions runs the fast suite on every push and a separate pinned-
 the rotating GTFS snapshot and slow experiments remain local checks. Benchmark runs longer than
 a working session are recorded as they finish.
 
-## Rust port (in progress)
+## Rust kernels
 
-The Rust workspace contains the initial `efo-core` data and numerical utilities and
-`efo-highs` bindings to HiGHS 1.12.0. Models, independent replays, benchmark reporting,
-and a Rust CLI are still pending. The Python commands remain the runnable application;
-full Python/Rust output parity and performance have not been measured.
-
-To build the Rust libraries, install stable Rust, CMake, and a C++ compiler, then run:
+Two computations run in Rust (`crates/efo-kernels`), each chosen by profiling
+([Design](docs/DESIGN.md) §9). The first is ng-route pricing for the R2 bound, with a
+completion bound that discards labels unable to reach a negative reduced cost. The second is
+the iteration of the textbook interior-point method, with a sparse LDL' factorization: normal
+equations for LPs, the quasi-definite system otherwise. Formulations, HiGHS calls, replays and
+bundles stay in Python. The module `efo` is built into the system Python with
 
 ```sh
-git submodule update --init --recursive
-cargo test --workspace --locked
-cargo fmt --all -- --check
-cargo clippy --workspace --all-targets --locked -- -D warnings
+python -m pip install --no-build-isolation .
 ```
 
-HiGHS is built from the pinned source submodule. Its MIT licence is included at
-`crates/efo-highs/HiGHS/LICENSE.txt`.
+which needs stable Rust and maturin (in `requirements.txt`). `methods/native.py` refuses a
+module built from sources other than the tree's, so a result cannot run on a stale build.
 
 ## Results
 

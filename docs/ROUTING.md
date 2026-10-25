@@ -200,8 +200,20 @@ and ng-memory. Extending along p in P_ij requires y >= a_p and q+b_j <= C. The
 new charge is Q-omega_p for k >= 1 and y-e_ij for k=0, and the reduced cost
 grows by l_p-pi_j. Label L1 dominates L2 at the same node when c̄1 <= c̄2,
 q1 <= q2, y1 >= y2 and M1 ⊆ M2. The worst case is exponential; the cost is
-measured per instance. Pricing is the first candidate for a Rust/PyO3 kernel,
-and only after profiling ([Design](DESIGN.md) §8).
+measured per instance.
+
+*As implemented* (`crates/efo-kernels/src/price.rs`, called from
+`models/colgen.py`). Labels are kept in an arena with their parent arc, the
+ng-memory is a 128-bit mask, and labels are extended in order of load. A label
+at j with load q is discarded when c̄ + f(j, C − q) > 0. Here f(j, r) is the
+least reduced cost of a walk from j back to the depot carrying at most r,
+computed by a backward recursion over loads that ignores the battery and
+elementarity. It is therefore a lower bound on every completion, so no route of
+negative reduced cost is lost and c̄* is exact whenever it is negative, which
+is all (R2.2) and (R2.4) use. The recursion needs integral demands, which every
+benchmark file has, and costs O(n² C/g) per call, g the gcd of the demands and
+C. Profiling chose the kernel: on E-n30-k3, Python labeling took 98.7% of R2's
+time ([Design](DESIGN.md) §9).
 
 The phase delivers bounds, not branch-and-price. Upper bounds come from R1
 incumbents, from the restricted master solved as a MILP over the generated

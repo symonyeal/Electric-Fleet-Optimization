@@ -254,9 +254,15 @@ urllib, hashlib, and datetime for the data adapters.
   of the first release and it does not solve integrality.
 - Optional later conic cross-check: a compatible conic solver for fixed-integer
   M2 and R3. This is an independent formulation, not a prerequisite.
-- Rust/PyO3 only after profiling identifies a specific kernel. R2 pricing is the
-  first candidate. Do not preemptively implement graph construction or
-  factorization in Rust.
+- Rust/PyO3 only after profiling identifies a specific kernel. Two did, on
+  24 October 2026. Labeling took 98.7% of R2's time on E-n30-k3 (106.6 of
+  108.0 s; the HiGHS master took under 1%). In the textbook IPM, dense
+  normal-equation factorization took 20.4 of 25.3 s on the M1 relaxation to
+  08:00, and scipy.sparse construction dominated the tree's 745 small node
+  solves. Both moved to `crates/efo-kernels`, behind the PyO3 module `efo`.
+  Graph construction (0.08 s on E-n30-k3, 2.0 s for R1's rows on E-n101-k8),
+  the M1 rows (0.17 s full day), the replays and the bundles stayed in Python:
+  none is a measured cost.
 - evrp-python is run from a checkout outside the repository, never installed
   with its pins ([Routing](ROUTING.md) §9).
 

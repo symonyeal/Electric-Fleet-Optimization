@@ -47,6 +47,10 @@ it, then update the status).
 | M. E. Lübbecke and J. Desrosiers, "Selected topics in column generation," Operations Research 53(6), 2005 | Lagrangian bound (R2.2) during column generation | Cited |
 | J. Gondzio, P. González-Brevis, P. Munari, "New developments in the primal-dual column generation technique," European Journal of Operational Research 224(1), 2013 | Early-terminated interior duals; the delta_k rule | Cited |
 | P. Munari and J. Gondzio, "Using the primal-dual interior point algorithm within the branch-price-and-cut method," Computers & Operations Research 40(8), 2013 | Interior duals in VRP column generation | Cited |
+| R. J. Vanderbei, "Symmetric quasidefinite matrices," SIAM Journal on Optimization 5(1), 1995 | An LDL' of a quasi-definite matrix exists for every symmetric permutation, so the order is chosen for fill alone | Cited |
+| P. E. Gill, M. A. Saunders, J. R. Shinnerl, "On the stability of Cholesky factorization for symmetric quasidefinite systems," SIAM Journal on Matrix Analysis and Applications 17(1), 1996 | Why the normal equations are preferred for LPs: the error of a quasi-definite LDL' grows as the regularization is approached | Cited |
+| S. Mehrotra, "On the implementation of a primal-dual interior point method," SIAM Journal on Optimization 2(4), 1992 | Predictor-corrector centering, `sigma=None` in methods/ipm.py | Cited |
+| S. J. Wright, "Modified Cholesky factorizations in interior-point algorithms for linear programming," SIAM Journal on Optimization 9(4), 1999 | A pivot lost in the normal matrix replaced by a huge value, which drops its component | Cited |
 | M. A. Duran and I. E. Grossmann, "An outer-approximation algorithm for a class of mixed-integer nonlinear programs," Mathematical Programming 36, 1986, [link](https://link.springer.com/article/10.1007/BF02592064) | Outer approximation, Algorithms §6 | Cited |
 | P. Bonami, M. Kılınç, J. Linderoth, "Algorithms and software for convex mixed integer nonlinear programs," [preprint](https://optimization-online.org/2009/10/2429/) | Convex MINLP survey | Cited |
 
@@ -54,7 +58,8 @@ it, then update the status).
 
 | Source | Used for | Status |
 | --- | --- | --- |
-| [HiGHS v1.12.0](https://github.com/ERGO-Code/HiGHS/tree/v1.12.0), commit `755a8e027a99a8d4ecf153a8dde4b2a767cdf384` | Native solver for the initial Rust libraries | Source pinned as a submodule; C API and MIT licence inspected 23 October 2026; full Python/Rust solver parity pending |
+| [faer 0.24.4](https://crates.io/crates/faer) | Sparse LDL' with approximate minimum degree ordering and sign-based dynamic regularization, `crates/efo-kernels/src/ldl.rs` | Source inspected 24 October 2026: `sparse/linalg/cholesky.rs` (symbolic and numeric LDL', `LdltRegularization`, solve) and its tests |
+| [PyO3 0.30](https://pyo3.rs), [rust-numpy 0.30](https://github.com/PyO3/rust-numpy), [maturin 1.15](https://www.maturin.rs) | The module `efo` and its build | Used through their documented interfaces |
 | TransLink static GTFS, snapshot 26SEP_20260925 ([Data](DATA.md) §2) | Transit timetable | Inspected 29 September 2026: all files; counts and checksum recorded |
 | [TransLink GTFS Static Data terms](https://www.translink.ca/about-us/doing-business-with-translink/app-developer-resources/gtfs/gtfs-data) | Licence and attribution legend | Inspected 29 September 2026 (search summary of the page) |
 | [The Buzzer, May 2019](https://buzzer.translink.ca/2019/05/translinks-four-battery-electric-buses-are-here/); [Daily Hive](https://dailyhive.com/vancouver/translink-electric-battery-bus-route-100) | Route 100 as TransLink's battery-electric pilot, chargers at Marpole Loop and 22nd Street Station, 4-7 minute charges | Inspected 29 September 2026 (search summary) |

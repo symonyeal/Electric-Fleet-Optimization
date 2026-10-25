@@ -3,3 +3,4 @@ scipy>=1.14
 matplotlib>=3.9
 pytest>=8.0
 ruff==0.16.7
+maturin>=1.9,<2

@@ -13,6 +13,12 @@ On 29 September 2026 the same tests passed on a second machine, a 13th Gen Intel
 bundle names its processor and versions under `provenance.host`; elapsed times and
 time-limited bounds are comparable only between bundles that share them.
 
+The Rust kernels (`crates/efo-kernels`, module `efo`) were built on 24 October 2026 with rustc
+1.98.1 (MSVC), faer 0.24.4, PyO3 0.30.1 and maturin 1.15.0, by
+`python -m pip install --no-build-isolation .`, which installs `efo` into the system Python.
+`methods/native.py` recomputes the digest of the kernel sources and refuses an installed module
+built from others, and each bundle records that digest under `bundle.versions.kernels`.
+
 | Capability | Finding | Consequence |
 | --- | --- | --- |
 | `milp` | Returns `mip_dual_bound`, `mip_gap`, `mip_node_count` with the incumbent | Lower bounds come from `mip_dual_bound`, never from `fun` |

@@ -127,6 +127,44 @@ routes only on cases where both have validated residuals. Never form A inverse
 or H inverse explicitly. Regularization must be reported and residuals checked
 against the unregularized original equations.
 
+*As implemented* (`methods/ipm.py`, `crates/efo-kernels/src/ipm.rs`). Python
+eliminates fixed columns, shifts the bounds, restores the point and computes (A3);
+the iteration runs in Rust. Each Newton system is factored by a sparse LDL' (faer)
+in an approximate-minimum-degree order chosen once from the pattern. For an LP
+the normal matrix A(D + d_p I)^{-1}A' + d_d I is positive definite, and its LDL'
+is backward stable in any order. The quasi-definite system loses accuracy as D
+spreads near the optimum (Gill, Saunders and Shinnerl, 1996). The normal
+equations are therefore used unless their factor would hold more than twice the
+entries of the quasi-definite one, which happens when A has dense columns; both
+counts come from the symbolic analysis. A pivot lost to cancellation in the
+normal matrix is replaced by 1e128, which drops its component (Wright, 1999).
+A quasi-definite pivot of the wrong sign, or below 1e-13, is replaced by
+±1e-8. Every solve is refined against the regularized matrix itself, at most
+three times. Refining against the unregularized system drifts along its null
+space when that system is singular. On R3's fixed-route barrier this produced a
+first step 1.6e4 away from the old one. A direction that is not finite ends
+the method as `numerical` at the last finite iterate.
+
+Measured 24 October 2026 on the Ryzen 7 PRO 6850U, for the LP relaxation of M1 on
+Route 100 to 08:00 (2,599 rows, 3,938 columns): 0.07 s in 16 iterations with
+the predictor-corrector, 0.17 s in 80 at sigma = 0.1. The dense normal equations of
+the earlier Python implementation took 25.3 s in 80 iterations, 20.4 s of them in
+the factorization. HiGHS's interior-point method took 0.07 s, presolve included. The full-day
+relaxation (47,621 rows, 71,370 columns) solves in 4 to 7 s in 28 iterations, the
+symbolic analyses of both systems included. On the educational tree over tiny M1 with
+four trips, the test that took 67.8 s takes 1.7 s.
+
+Mehrotra's predictor-corrector (1992) is available as `sigma=None`. It reuses the
+factor for an affine direction and a corrected one, and takes about a fifth of
+the iterations. It is not the default. Its last iterate is so nearly
+complementary that the multiplier z_j of a basic column falls to about 1e-12,
+below the dual residual. The reduced cost r_j of a column without an upper
+bound can then be slightly negative, and (A3) is -inf. On tiny M1 with five
+trips this left every node bound at its parent's, and the tree needed 6,483
+nodes instead of fewer than 1,000. Fixed centering keeps z well above the
+residual, so the bound holds. The predictor-corrector serves where only the
+point is used.
+
 **3. Infeasibility, unboundedness, and bounded dual estimates**
 
 Failure of the textbook iteration is `numerical` or `limit`, not `infeasible`.

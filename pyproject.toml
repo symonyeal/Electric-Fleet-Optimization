@@ -1,3 +1,19 @@
+[build-system]
+requires = ["maturin>=1.9,<2"]
+build-backend = "maturin"
+
+[project]
+name = "efo"
+version = "0.2.0"
+description = "Rust kernels of Electric-Fleet-Optimization: ng-route pricing and the interior-point method"
+requires-python = ">=3.10"
+dependencies = ["numpy>=2.0"]
+
+[tool.maturin]
+manifest-path = "crates/efo-py/Cargo.toml"
+module-name = "efo"
+features = ["extension-module"]
+
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]

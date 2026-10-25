@@ -8,11 +8,13 @@ A bundle is the result record of checks/certificate.py with one more key, `bundl
     formulation ... the model's formulation version (VERSION in its module); a bound is compared
                     only with the formulation that produced it
     code .......... full commit hash, dirty flag, and the SHA-256 of the executed source and
-                    configuration (CRLF read as LF, so a checkout's line endings do not matter)
+                    configuration, the Rust kernels included (CRLF read as LF, so a checkout's
+                    line endings do not matter)
     command ....... argv of the run
     inputs ........ SHA-256 of every input file (instance or corridor, scenario, seed routes)
     scenario ...... the complete scenario values and their digest (transit)
-    versions, host  Python, numpy, SciPy (which bundles HiGHS), processor
+    versions, host  Python, numpy, SciPy (which bundles HiGHS), the kernels' source digest,
+                    processor
     seeds ......... none is set: HiGHS runs at its default seed
     tolerances, time_limit (requested, the run's own budget, seconds spent)
     artifacts ..... digests of the routes (EVRP) or of the duties, plan and infrastructure
@@ -63,9 +65,11 @@ def sha256(path):
 
 def source_digest(root=ROOT):
     """SHA-256 over (path, sha256) of every executed source and configuration file."""
+    from methods.native import files as kernels
     files = sorted(p for d in CODE for p in (Path(root) / d).rglob("*.py")
                    if "__pycache__" not in p.parts)
     files += [Path(root) / f for f in CONFIG if (Path(root) / f).exists()]
+    files += kernels(Path(root))
     return digest([[p.relative_to(root).as_posix(), sha256(p)] for p in files])
 
 
@@ -134,13 +138,14 @@ def bundle(r, case, command, code=None, out=None):
     """The record r of case as a schema-2 bundle."""
     import numpy
     import scipy
+    from methods.native import SOURCE
     _, v, files = inputs(case, out)
     return dict(r, bundle=dict(
         schema=SCHEMA, case=case.signature(), formulation=formulations()[case.model],
         code=code or identity(), command=list(command), inputs=files,
         scenario=None if v is None else dict(values=v, digest=digest(v)),
         versions=dict(python=sys.version.split()[0], numpy=numpy.__version__,
-                      scipy=scipy.__version__, highs="bundled with SciPy"),
+                      scipy=scipy.__version__, highs="bundled with SciPy", kernels=SOURCE),
         host=HOST, seeds=dict(highs="default"), tolerances=r.get("tolerances"),
         time_limit=dict(requested=case.time, budget=r.get("time_budget"), spent=r.get("elapsed")),
         artifacts=artifacts(r)))
