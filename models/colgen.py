@@ -23,7 +23,6 @@ entering S, so labeling and its dominance are unchanged, and
     z_LP(R2.1, R2.3) >= sum_i pi_i + sum_S sigma_S kappa(S) + n min(0, cbar*).     (R2.4)
 """
 
-import heapq
 import itertools
 import math
 import time
@@ -35,6 +34,7 @@ from scipy.optimize import Bounds, LinearConstraint, linprog, milp
 from checks.certificate import digest, gap_state, provenance, record
 from checks.route import replay
 from methods.ipm import ipm, standard
+from methods.native import Pricer
 from models.paths import paths
 
 VERSION = "R2/1"
@@ -48,83 +48,44 @@ def ng_sets(p, nu=8):
     return {i: sum(1 << pos[j] for j in sorted(I, key=lambda j: D[i, j])[:nu]) for i in I}
 
 
-def price(p, P, pi, ng, labels=None, time_limit=math.inf, tol=1e-9, W=None):
-    """Least reduced-cost ng-routes by labeling on the station-path multigraph.
+def pricer(p, P, ng):
+    """The pricing graph of instance p over the station paths P and ng-sets ng, for price()."""
+    arcs = [a for v in P.values() for a in v]
+    pos = {i: k for k, i in enumerate(p["I"])}
+    X = len(p["X"])
+    return Pricer(X, p["depot"], [pos.get(k, -1) for k in range(X)], np.asarray(p["b"], float),
+                  float(p["C"]), float(p["Q"]), [a[0] for a in arcs], [a[1] for a in arcs],
+                  np.array([a[2] for a in arcs], float), np.array([a[3] for a in arcs], float),
+                  np.array([a[4] for a in arcs], float), [len(a[5]) == 2 for a in arcs],
+                  [ng.get(k, 0) for k in range(X)]), arcs
+
+
+def price(p, P, pi, ng, labels=None, time_limit=math.inf, tol=1e-9, W=None, ub=0.0, G=None):
+    """Least reduced-cost ng-routes by labeling on the station-path multigraph, in Rust
+    (crates/efo-kernels/src/price.rs, whose legend states the extension and dominance rules).
 
     A label at node i is (cbar, q, y, M): reduced cost, load, charge on leaving i, ng-memory.
     Extending along p in P_ij needs y >= a_p and, at a customer j, j not in M and q + b_j <= C;
     then y' = y - e_ij (direct) or Q - w_p, cbar' = cbar + l_p - pi_j - W_ij, M' = (M & N_j) | {j}.
-    W is the arc dual of (R2.4), zero when absent.
-    L1 dominates L2 at the same node if cbar1 <= cbar2, q1 <= q2, y1 >= y2 and M1 within M2.
-    Labels are processed in order of load, which grows along every extension.
+    W is the arc dual of (R2.4), zero when absent. A label whose completion bound (the least
+    reduced cost of a return to the depot within the remaining load, ignoring the battery and
+    elementarity) leaves it at or above ub is not extended.
 
     INPUT   labels ..... None for exact pricing; k keeps the k best labels per node (heuristic)
+            ub ......... cbar* is exact when below ub; every column below ub is found
+            G .......... pricer(p, P, ng), built here if absent
     OUTPUT  (cbar*, columns, exact): cbar* the least reduced cost over completed routes (exact
-            only if exact is True), columns with cbar < 0 sorted by cbar
+            only if exact is True and cbar* < ub), columns with cbar < 0 sorted by cbar
     """
-    o, I, b, C, Q = p["depot"], p["I"], p["b"], p["C"], p["Q"]
-    pos = {i: k for k, i in enumerate(I)}
-    out = {}
-    for (i, _), v in P.items():
-        out.setdefault(i, []).extend(v)
-    lab = [(0.0, 0.0, Q, 0, -1, None, o)]            # cbar, q, y, M, parent, path, node
-    alive, at = [True], {i: [] for i in I}
-    heap, best, done, t0 = [(0.0, 0)], math.inf, [], time.perf_counter()
-    exact = labels is None
-    while heap:
-        if time.perf_counter() - t0 > time_limit:
-            exact = False
-            break
-        _, k = heapq.heappop(heap)
-        if not alive[k]:
-            continue
-        cb, q, y, M, _, _, i = lab[k]
-        for path in out.get(i, ()):
-            _, j, l, a, w, nodes = path
-            if y < a - tol:
-                continue
-            if j == o:
-                if i != o:
-                    best = min(best, cb + l)
-                    if cb + l < -tol:
-                        done.append((cb + l, k, path))
-                continue
-            if M >> pos[j] & 1 or q + b[j] > C + tol:
-                continue
-            new = (cb + l - pi[j] - (0.0 if W is None else W[i, j]), q + b[j],
-                   y - a if len(nodes) == 2 else Q - w,
-                   (M & ng[j]) | (1 << pos[j]), k, path, j)
-            if any(lab[m][0] <= new[0] + tol and lab[m][1] <= new[1] + tol and
-                   lab[m][2] >= new[2] - tol and not lab[m][3] & ~new[3] for m in at[j]):
-                continue
-            for m in at[j]:
-                if new[0] <= lab[m][0] + tol and new[1] <= lab[m][1] + tol and \
-                        new[2] >= lab[m][2] - tol and not new[3] & ~lab[m][3]:
-                    alive[m] = False
-            at[j] = [m for m in at[j] if alive[m]]
-            if labels is not None and len(at[j]) >= labels:
-                worst = max(at[j], key=lambda m: lab[m][0])
-                if lab[worst][0] <= new[0]:
-                    continue
-                alive[worst] = False
-                at[j].remove(worst)
-            lab.append(new)
-            alive.append(True)
-            at[j].append(len(lab) - 1)
-            heapq.heappush(heap, (new[1], len(lab) - 1))
-    cols, seen = [], set()
-    for rc, k, last in sorted(done, key=lambda t: t[0]):
-        arcs = [last]
-        while lab[k][4] >= 0:
-            arcs.append(lab[k][5])
-            k = lab[k][4]
-        arcs.reverse()
-        nodes = [o] + [v for a in arcs for v in a[5][1:]]
-        if tuple(nodes) in seen:
-            continue
-        seen.add(tuple(nodes))
-        visits = [a[1] for a in arcs[:-1]]
-        cols.append(dict(rc=rc, cost=sum(a[2] for a in arcs), visits=visits, nodes=nodes))
+    G, arcs = G or pricer(p, P, ng)
+    best, exact, found, _ = G.price(np.asarray(pi, float),
+                                    None if W is None else np.ascontiguousarray(W, float).ravel(),
+                                    labels, time_limit, tol, ub)
+    cols = []
+    for rc, ks in found:
+        A = [arcs[k] for k in ks]
+        cols.append(dict(rc=rc, cost=sum(a[2] for a in A), visits=[a[1] for a in A[:-1]],
+                         nodes=[p["depot"]] + [v for a in A for v in a[5][1:]]))
     return best, cols, exact
 
 
@@ -258,6 +219,7 @@ def colgen(p, duals="ipm", nu=8, eps=1e-6, delta_max=0.1, delta_min=1e-9, D=10.0
     milp_limit = min(300.0, 0.1 * time_limit) if milp_limit is None else milp_limit
     left = lambda: max(0.0, time_limit - milp_limit - (time.perf_counter() - t0))
     P, ng, n = paths(p), ng_sets(p, nu), len(p["I"])
+    G = pricer(p, P, ng)
     cols = initial(p, P) + from_routes(p, init_routes)
     keys = {tuple(c["nodes"]) for c in cols}
     L, delta, traj, calls, exact_calls = -math.inf, delta_max, [], 0, 0
@@ -268,12 +230,12 @@ def colgen(p, duals="ipm", nu=8, eps=1e-6, delta_max=0.1, delta_min=1e-9, D=10.0
         f, pi, lam, st, sigma = master(p, cols, duals, delta if duals == "ipm" else None,
                                        time_limit=left(), cuts=cuts)
         W = arc_duals(p, cuts, sigma) if cuts else None
-        _, new, _ = price(p, P, pi, ng, labels=labels, time_limit=left(), W=W)
+        _, new, _ = price(p, P, pi, ng, labels=labels, time_limit=left(), W=W, G=G)
         calls += 1
         fresh = [c for c in new if tuple(c["nodes"]) not in keys]
         exact = False
         if not fresh and left() > 0:
-            cb, new, exact = price(p, P, pi, ng, time_limit=min(price_limit, left()), W=W)
+            cb, new, exact = price(p, P, pi, ng, time_limit=min(price_limit, left()), W=W, G=G)
             calls += 1
             exact_calls += 1
             if exact:                                                  # (R2.2), (R2.4)

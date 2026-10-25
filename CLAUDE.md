@@ -14,7 +14,7 @@ not break. Codex reads the same file through [AGENTS.md](AGENTS.md).
 | Name a failed solve by its status: infeasible, limit, unbounded, numerical, stall. | Malformed data and an instance no schedule can serve both end in a failed solve. Only the second is an infeasibility. |
 | Treat a published value, from the report or evrp-python, as an input to replay. | [Routing](docs/ROUTING.md) §9 records why their numbers are not results until replayed. |
 | Cite only what [Sources](docs/SOURCES.md) records, and add the entry in the change that uses it. | A formulation is validated by the paper it implements, not by the solver that ran it. |
-| Add a dependency only after measurement. Use the system Python 3.14; no virtual environment. | numpy, scipy, and HiGHS solve every planned model. |
+| Add a dependency only after measurement. Use the system Python 3.14; no virtual environment. | numpy, scipy, and HiGHS solve every planned model; the Rust kernels (faer, PyO3) replaced two measured costs ([Design](docs/DESIGN.md) §9). |
 | State what was measured and what was not. | "Not measured" is a finding. A projection from row counts is not a runtime. |
 
 ## The feasible set is written once
@@ -25,6 +25,13 @@ and the OA master. `checks/` never imports `models/`: the validators reconstruct
 routes and schedules from instance files and returned solutions alone. R1-TR and the
 enumeration in `checks/enum.py` are independent formulations by design; a second
 copy of R1's rows would destroy the agreement they test.
+
+## Rust
+
+`crates/efo-kernels` holds what Python cannot do quickly, each a measured cost: ng-route
+pricing and the interior-point iteration with its sparse factorization. `crates/efo-py` exposes
+them as the module `efo`, imported only by `methods/native.py`, which refuses a build from other
+sources. Formulations, HiGHS calls, replays and bundles stay in Python.
 
 ## Code
 
@@ -41,6 +48,10 @@ criteria are demonstrated, not when its tasks are done.
 ## Before a change is finished
 
 ```text
+python -m pip install --no-build-isolation .     # after any change under crates/
+cargo fmt --all -- --check
+cargo clippy --workspace --all-targets --locked -- -D warnings
+cargo test -p efo-kernels --locked
 python -m pytest -q
 python -m ruff check .
 python -m pip check
