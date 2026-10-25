@@ -22,7 +22,7 @@ alone (Models §4); the stress term is studied at fixed integers, by M1-Q.
 
 import numpy as np
 import scipy.sparse as sp
-from scipy.optimize import Bounds, LinearConstraint, NonlinearConstraint, linprog, milp, minimize
+from scipy.optimize import Bounds, LinearConstraint, NonlinearConstraint, linprog, minimize
 
 from checks.certificate import provenance, record
 from checks.schedule import replay_energy
@@ -30,8 +30,8 @@ from methods.branch import split
 from methods.ipm import ipm, standard
 from methods.oa import oa
 from models.fleet import linear, rows, solution
+from models.milp import bracket
 from models.transit import compile
-import itertools
 
 VERSION = "M2/2"      # follows M1/2
 
@@ -201,8 +201,7 @@ def bound_a5(d, w):
     """(A5) at w: multipliers from the LP with each loss row replaced by its tangent at w and
     the objective by its tangent; any such multipliers give a valid bound."""
     Aub, bub, Aeq, beq = split(d["Af"], d["lo"], d["hi"])
-    P, n = d["P"], len(w)
-    eta = 1 / d["jac"](np.zeros(n)).data[0] if len(P) else 1.0
+    P = d["P"]
     Jw = d["jac"](w)
     Tt = Jw                                           # rows: jac_k (v - w) + c_k(w) <= 0
     bt = Jw @ w - d["con"](w)
@@ -221,7 +220,6 @@ def bound_a5(d, w):
         lam @ d["con"](w) if len(P) else 0.0)
     a = g + Aub.T @ mul + Aeq.T @ nu + (Jw.T @ lam if len(P) else 0.0)
     l, u = d["lb"][d["F"]], d["ub"][d["F"]]
-    del eta
     return float(Lw + np.minimum(a * (l - w), a * (u - w)).sum() + d["const"])
 
 
@@ -301,32 +299,20 @@ def m2p(c, v, J=8, fixed=None, time_limit=600.0):
     v0 = loss_only(v)
     M = rows(c, v0, fixed, loss=True)
     N, eta, alpha, P = len(M["c"]), M["eta"], M["alpha"], v["charger"]["P"]
-    A = linear(M)
-    r = np.linspace(0.0, P, J + 1)
-    out = {}
-    for side, pieces in (("lower", [(1 / eta + 2 * alpha * s, alpha * s * s) for s in r]),
-                         ("upper", [(1 / eta + alpha * (s0 + s1), alpha * s0 * s1)
-                                    for s0, s1 in itertools.pairwise(r)])):
-        rr, cc, dd, bb = [], [], [], []
-        for q, (p, g) in enumerate(M["loss"]):
-            for k, (slope, rhs) in enumerate(pieces):
-                row = q * len(pieces) + k
-                rr += [row, row]
-                cc += [p, g]
-                dd += [slope, -1.0]
-                bb.append(rhs)
-        T = sp.csr_array((dd, (rr, cc)), shape=(len(bb), N))
-        res = milp(M["c"], constraints=[A, LinearConstraint(T, -np.inf, np.array(bb))],
-                   integrality=M["integ"], bounds=Bounds(M["lb"], M["ub"]),
-                   options=dict(time_limit=time_limit, mip_rel_gap=1e-7))
-        if side == "lower":
-            out["lower"] = getattr(res, "mip_dual_bound", None) if res.x is not None else None
-        else:
-            out["upper"] = None
-            if res.x is not None:
-                duties, plan, infra = solution(M, v0, res.x)
-                rp = replay_energy(c, v0, duties, plan, infra, loss=True)
-                out["upper"] = rp["cost"] if rp["ok"] else None
-                out["upper_replay"] = rp["defects"]
+
+    def loss_rows(pieces):                              # slope p - g <= intercept
+        k = len(pieces)
+        rr = np.repeat(np.arange(len(M["loss"]) * k), 2)
+        cc = [z for p, g in M["loss"] for _ in pieces for z in (p, g)]
+        dd = [z for _ in M["loss"] for s, _ in pieces for z in (s, -1.0)]
+        return (sp.csr_array((dd, (rr, cc)), shape=(len(M["loss"]) * k, N)),
+                np.tile([b for _, b in pieces], len(M["loss"])))
+
+    def replay(x):
+        rp = replay_energy(c, v0, *solution(M, v0, x), loss=True)
+        return (rp["cost"] if rp["ok"] else None), rp["defects"]
+
+    out = bracket(M["c"], linear(M), M["lb"], M["ub"], M["integ"], eta, alpha, P, J, loss_rows,
+                  replay, time_limit)
     out["interpolation_error"] = alpha * (P / J) ** 2 / 4
     return out

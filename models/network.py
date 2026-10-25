@@ -22,7 +22,7 @@ from checks.certificate import digest, provenance, record
 from checks.schedule import replay
 from data.scenario import validate
 from methods.ipm import ipm, standard
-from models.transit import compat, great_circle_km  # noqa: F401  (re-exported)
+from models.transit import compat
 
 VERSION = "M0/1"
 

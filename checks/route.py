@@ -5,8 +5,8 @@ depot at both ends. An interior depot visit ends one route and starts the next.
 """
 
 import math
-from itertools import pairwise
 import re
+from itertools import pairwise
 
 
 def replay_charge(p, sc, routes, charges, tol=1e-6):

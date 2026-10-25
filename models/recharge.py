@@ -29,8 +29,7 @@ from data.scenario import validate
 from methods.branch import split
 from methods.ipm import ipm, standard
 from methods.oa import oa
-from models.milp import Rows
-import itertools
+from models.milp import Rows, bracket
 
 VERSION = "R3/1"
 
@@ -165,7 +164,6 @@ def routes_of(p, M, v):
                 break
             k = succ[a[2]]
         R.append([z + 1 for z in r])
-        del r
     return R, Qc
 
 
@@ -212,37 +210,23 @@ def r3p(p, sc, J=8, time_limit=600.0):
     """R3-P (Routing §6): tangents (R3.4) at powers r_0..r_J give a lower MILP; the maximum of
     the secants (R3.5), valid since q <= P tau keeps q/tau in [0, P], an upper MILP whose
     routes are replayed. OUTPUT lower (valid lower bound on R3), upper (replayed cost)."""
-    from scipy.optimize import Bounds, LinearConstraint, milp
     M = rows(p, sc)
     N, i, m = len(M["c"]), M["idx"], M["m"]
     eta, alpha, P = sc["charger"]["eta"], sc["charger"]["alpha"], sc["charger"]["P"]
-    A = M["R"].constraint(N)
-    r = np.linspace(0.0, P, J + 1)
-    out = {}
-    for side, pieces in (("lower", [(1 / eta + 2 * alpha * s, alpha * s * s) for s in r]),
-                         ("upper", [(1 / eta + alpha * (s0 + s1), alpha * s0 * s1)
-                                    for s0, s1 in itertools.pairwise(r)])):
-        rr, cc, dd = [], [], []
-        for s in range(m):
-            for k, (slope, tq) in enumerate(pieces):
-                row = s * len(pieces) + k
-                rr += [row] * 3
-                cc += [i["q"] + s, i["tau"] + s, i["g"] + s]
-                dd += [slope, -tq, -1.0]
-        T = sp.csr_array((dd, (rr, cc)), shape=(m * len(pieces), N))
-        res = milp(M["c"], constraints=[A, LinearConstraint(T, -np.inf, 0.0)],
-                   integrality=M["integ"], bounds=Bounds(M["lb"], M["ub"]),
-                   options=dict(time_limit=time_limit, mip_rel_gap=1e-7))
-        if side == "lower":
-            out["lower"] = getattr(res, "mip_dual_bound", None) if res.x is not None else None
-        else:
-            out["upper"] = None
-            if res.x is not None:
-                routes, charges = routes_of(p, M, res.x)
-                rp = replay_charge(p, sc, routes, charges)
-                out["upper"] = rp["cost"] if rp["ok"] else None
-                out["upper_defects"] = rp["defects"]
-    return out
+
+    def loss_rows(pieces):                              # slope q - intercept tau - g <= 0
+        k = len(pieces)
+        rr = np.repeat(np.arange(m * k), 3)
+        cc = [z for s in range(m) for _ in pieces for z in (i["q"] + s, i["tau"] + s, i["g"] + s)]
+        dd = [z for _ in range(m) for a, b in pieces for z in (a, -b, -1.0)]
+        return sp.csr_array((dd, (rr, cc)), shape=(m * k, N)), np.zeros(m * k)
+
+    def replay(x):
+        rp = replay_charge(p, sc, *routes_of(p, M, x))
+        return (rp["cost"] if rp["ok"] else None), rp["defects"]
+
+    return bracket(M["c"], M["R"].constraint(N), M["lb"], M["ub"], M["integ"], eta, alpha, P, J,
+                   loss_rows, replay, time_limit)
 
 
 def r3(p, sc, name=None, max_iter=50, time_limit=3600.0, master_limit=600.0, keep_x=False):

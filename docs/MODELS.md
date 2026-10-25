@@ -202,11 +202,10 @@ carry energy between days instead of resetting every day for free. If a fixed
 ready-energy target replaces the equality, state it and reconcile both schedules
 to the same target before comparing costs.
 
-The equality e_kT = e_k0 is the cyclic boundary: the bus ends the horizon, overnight
-recovery included, with the energy it started with. It is the only boundary under which a
-schedule repeats from one day to the next, and only if the recovery charging inside the
-horizon (depot plugs and power, depot grid capacity, the time after each return, the tariff
-window) is feasible.
+The equality e_kT = e_k0 is the cyclic boundary, overnight recovery included. It is the
+only boundary under which a schedule repeats from one day to the next, and only if the
+recovery charging inside the horizon (depot plugs and power, depot grid capacity, the time
+after each return, the tariff window) is feasible.
 
 All terms in (1)-(8) are linear. Binary variables encode scheduling and
 connections; integer n encodes plug count. Symmetry breaking z_k >= z_k+1 is
@@ -237,10 +236,9 @@ $$r_i\ge s^0B-(y_i-E_i-e_{i0})\ \text{ if } x_{i0}=1,\qquad 0\le r_i\le(s^0-r)Bx
 and the objective prices rho c_dep r_i / eta: the depot restores each bus to s0 B
 overnight, outside the modeled day. A bus that returns above s0 B is credited nothing,
 since the model has no export or vehicle-to-grid decision; under nonnegative prices no
-schedule earns revenue from terminal energy. Revision 098642b and earlier priced the
-restoration as s0 B - z_i with z_i up to smax B, a signed term: with cheap terminal energy
-and dear depot energy, a schedule that bought energy on route earned a depot "credit" of
-24.46 CAD on a tiny instance (`tests/test_regressions.py`, test 07).
+schedule earns revenue from terminal energy. A signed restoration term s0 B - z_i with
+z_i up to smax B paid a depot credit and is excluded (`tests/test_regressions.py`, test 07;
+[Validation](VALIDATION.md) §2a).
 
 The recovery itself is not modeled: no depot plugs or charger power, no depot grid
 capacity, no time window after each return, no 22:00-06:00 tariff window, no circulation
@@ -266,11 +264,9 @@ trips alternate terminals, and both terminals are sites.
 Rows (5) and (6) are summed per site and slot over the windows present, with the base
 load L_s y_s in every capacity and peak row; the rows L_s y_s <= G0_s + h_s and
 D_s >= L_s y_s are written once per site, so the meter's obligations do not depend on which
-slots carry a charging variable. Revision 098642b and earlier wrote L only into the rows of
-slots with charging variables: a closed candidate site with such slots was billed its base
-load (5 CAD above the replay on a tiny instance), L > G0 forced a closed site open, and an
-open site with no charging in the billing window was billed no demand by the model while the
-replay billed it. `models/transit.py` compiles the instance (compatibility arcs, deadhead
+slots carry a charging variable. Writing L only into those rows billed closed sites, forced a
+site open when L > G0, and billed an open site no demand when nothing charged in the billing
+window, while the replay billed it ([Validation](VALIDATION.md) §2a). `models/transit.py` compiles the instance (compatibility arcs, deadhead
 distances, energies, windows, input digests) once; M2's fixed-integer subproblems and M3
 reuse the rows and change only bounds and nonlinear terms.
 The replay in `checks/schedule.py` simulates each bus slot by slot. It checks energy,

@@ -29,9 +29,7 @@ from pathlib import Path
 
 SOLVER = {"optimal", "feasible_limit", "no_incumbent", "infeasible", "unbounded", "local",
           "numerical", "stall", "limit"}
-STATUS = SOLVER | {"invalid_bound", "validation_failed"}
 VALIDATION = {"replayed", "validation_failed", "not_available"}
-CERTIFICATE = {"certified", "open", "invalid_bound", "not_applicable"}
 
 
 def _fin(v):
@@ -89,8 +87,9 @@ def record(model, instance, status, U=None, L=None, *, solver, elapsed, provenan
 
     INPUT   status ....... the solver's termination, one of SOLVER
             U, L ......... feasible objective and valid lower bound; None or inf when absent
-            validation ... one of VALIDATION; None means replayed when U is given, else
-                           not_available
+            validation ... one of VALIDATION; None means replayed when U is given,
+                           validation_failed when a replay was made (kw replay) and refused it,
+                           else not_available
             objective .... the model's own objective at the returned solution; it must agree
                            with the replayed U within tol, or the record is validation_failed
             bound_source . what produced L (highs_dual, r22_exact_pricing, r24_exact_pricing,
@@ -103,7 +102,8 @@ def record(model, instance, status, U=None, L=None, *, solver, elapsed, provenan
         raise ValueError(f"solver status {status!r} not in {sorted(SOLVER)}")
     U, L = _fin(U), _fin(L)
     if validation is None:
-        validation = "replayed" if U is not None else "not_available"
+        validation = ("replayed" if U is not None else "validation_failed"
+                      if kw.get("replay") else "not_available")
     if validation not in VALIDATION:
         raise ValueError(f"validation {validation!r} not in {sorted(VALIDATION)}")
     defects = []
