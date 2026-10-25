@@ -19,7 +19,7 @@ import numpy as np
 
 from checks.certificate import provenance, record
 from checks.route import replay
-from models.milp import Rows, solve, status
+from models.milp import Rows, dual_bound, solve, status
 from models.paths import paths
 
 VERSION = {"R0": "R0/1", "R1": "R1/1", "R1-TR": "R1-TR/1"}
@@ -114,10 +114,8 @@ def r1(p, battery=True, time_limit=600.0, gap=1e-7):
     routes = routes_of(p, M, res.x) if res.x is not None else None
     rp = replay(p if battery else dict(p, Q=np.inf), routes) if routes else None
     U = rp["length"] if rp and rp["ok"] else None
-    L = getattr(res, "mip_dual_bound", None) if s in ("optimal", "feasible_limit") else None
+    L = dual_bound(res, s)
     return record(name, p["name"], s, U=U, L=L,
-                  validation="replayed" if U is not None else
-                  "validation_failed" if rp else "not_available",
                   objective=None if res.x is None else float(res.fun), bound_source="highs_dual",
                   solver=dict(code=int(res.status), message=res.message), elapsed=dt,
                   provenance=provenance(p, time_limit=time_limit, mip_rel_gap=gap,
@@ -194,10 +192,8 @@ def r1tr(p, beta=None, time_limit=600.0, gap=1e-7):
                 routes.append([loc[k] + 1 for k in r])
     rp = replay(p, routes) if routes else None
     U = rp["length"] if rp and rp["ok"] else None
-    L = getattr(res, "mip_dual_bound", None) if s in ("optimal", "feasible_limit") else None
+    L = dual_bound(res, s)
     return record("R1-TR", p["name"], s, U=U, L=L,
-                  validation="replayed" if U is not None else
-                  "validation_failed" if rp else "not_available",
                   objective=None if res.x is None else float(res.fun), bound_source="highs_dual",
                   solver=dict(code=int(res.status), message=res.message), elapsed=dt,
                   provenance=provenance(p, beta=beta, time_limit=time_limit, mip_rel_gap=gap,

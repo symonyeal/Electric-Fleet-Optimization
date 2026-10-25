@@ -3,7 +3,7 @@
 Read before changing anything. [README](README.md) states what the models are;
 [Design](docs/DESIGN.md) states why they are that way; [Validation](docs/VALIDATION.md)
 states what must be, and has been, checked. This file states the rules a change must
-not break. Codex reads the same file through [AGENTS.md](AGENTS.md).
+not break. Codex reads it as its fallback project file.
 
 ## Always on
 

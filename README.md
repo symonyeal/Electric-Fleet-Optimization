@@ -25,36 +25,6 @@ no driver shifts, no delivery time windows. It is not TransLink's operating plan
 
 The rest of this page is written for specialists.
 
-## Overview
-
-Reproducible models for electric-fleet routing, vehicle blocking, and charging planning.
-Each reported outcome carries a feasible upper bound, a valid lower bound, and an
-independent check, separating an operating insight from an untested assumption.
-
-**Status: result-integrity repair, 1 October 2026.** A published result is admitted only
-after its replay, lower-bound source, formulation, inputs, scenario, code identity, and
-artifacts pass the result contract ([Validation](docs/VALIDATION.md)). Legacy bundles carry a
-migration decision; dirty, stale, contradictory, and untraceable bundles do not support a
-verdict. GitHub Actions runs the fast suite on every push and a separate pinned-EVRP-data job;
-the rotating GTFS snapshot and slow experiments remain local checks. Benchmark runs longer than
-a working session are recorded as they finish.
-
-## Rust kernels
-
-Two computations run in Rust (`crates/efo-kernels`), each chosen by profiling
-([Design](docs/DESIGN.md) §9). The first is ng-route pricing for the R2 bound, with a
-completion bound that discards labels unable to reach a negative reduced cost. The second is
-the iteration of the textbook interior-point method, with a sparse LDL' factorization: normal
-equations for LPs, the quasi-definite system otherwise. Formulations, HiGHS calls, replays and
-bundles stay in Python. The module `efo` is built into the system Python with
-
-```sh
-python -m pip install --no-build-isolation .
-```
-
-which needs stable Rust and maturin (in `requirements.txt`). `methods/native.py` refuses a
-module built from sources other than the tree's, so a result cannot run on a stale build.
-
 ## Results
 
 <!-- results:begin -->
@@ -87,10 +57,6 @@ provenance, [Validation](docs/VALIDATION.md) the checks each phase must pass, an
 ## Background
 
 ### The problem
-
-Fleet electrification links vehicle availability, charging access, and grid demand. This
-repository turns that planning problem into an auditable operating model, while keeping the
-modelled case distinct from an agency operating plan or infrastructure authorization.
 
 An electric fleet trades range for charging. A delivery EV that cannot reach its
 next customer detours to a station; a bus that cannot finish its block needs a
@@ -138,10 +104,14 @@ dispatch, authorize infrastructure, or match the speed of VROOM, PyVRP, or HiGHS
 
 ## Run
 
-Python 3.14 with numpy, scipy (HiGHS 1.12) and matplotlib; `data/evrp.py` fetches the
-benchmark from evrp-python at a pinned commit and checks its SHA-256.
+Python 3.14 with numpy, scipy (HiGHS 1.12) and matplotlib, and stable Rust for the two
+kernels that profiling moved there ([Design](docs/DESIGN.md) §9): ng-route pricing and the
+interior-point iteration. `data/evrp.py` fetches the benchmark from evrp-python at a pinned
+commit and checks its SHA-256.
 
 ```text
+python -m pip install -r requirements.txt
+python -m pip install --no-build-isolation .     # builds the module efo from crates/
 python -m pytest -q -m "not slow"                  # the checks of Validation §2
 python run_case.py evrp E-n22-k4 R1 --time 600     # R0 | R1 | R1-TR | R2-ipm | R2-simplex
 python run_case.py transit route100 M1 --until 8   # M0 | M1; --until H cuts the day at H:00
@@ -152,4 +122,8 @@ python run_baseline.py E-n22-k4 --repo PATH        # evrp-python's GSGA, replaye
 ```
 
 Each run writes a bundle to `docs/results/`: status, U, L, gap, solver message, time,
-code revision, data checksums and parameters, with the replayed routes or schedule.
+code revision, data and kernel checksums and parameters, with the replayed routes or schedule.
+A bundle supports a verdict only after the result contract admits it ([Validation](docs/VALIDATION.md)).
+`methods/native.py` refuses a kernel module built from other sources. GitHub Actions runs the
+Rust checks, the fast suite and the pinned-EVRP-data tests on every push; the GTFS snapshot,
+which cannot be fetched again, and the slow experiments are local checks.

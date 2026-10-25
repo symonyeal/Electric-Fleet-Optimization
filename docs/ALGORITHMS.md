@@ -5,7 +5,7 @@ explicit bound, rather than presenting a feasible schedule as a certified optimu
 
 **1. Where interior-point methods enter**
 
-The computational study has two tracks sharing the same physical models.
+The methods and their roles ([Design](DESIGN.md) §5 gives the testable claim for each):
 
 | Track | Method | Role |
 | --- | --- | --- |
@@ -78,9 +78,10 @@ $$\alpha_x=\min\left\{1,\eta\min_{j:\Delta x_j<0}
 \frac{-x_j}{\Delta x_j}\right\},$$
 
 with the inner minimum omitted if there is no negative direction; define
-alpha_s similarly. An experimental predictor-corrector variant can reuse the
-factorization, but must be documented separately from the basic path-following
-algorithm and validated before entering the branch-and-bound experiment.
+alpha_s similarly. Mehrotra's predictor-corrector variant, which reuses the
+factorization, is separate from the basic path-following algorithm; its status
+and its limit for the branch-and-bound experiment are stated in the last
+paragraph of this section.
 
 With finite upper bounds, x + w = u, w >= 0 and multiplier v >= 0 join the
 system, with residual r_u = u - x - w. The stopping rule requires normalized
@@ -392,9 +393,8 @@ and decides every published verdict.
 A solver's `optimal` becomes the public `optimal` only through the certificate. With a
 replay that fails, the status is `validation_failed`; with no U, `no_incumbent`; with an
 objective that differs from the replayed cost by more than tau, `validation_failed`, U kept
-and L in doubt. Before this contract (revision 098642b and earlier) the rule was one-sided:
-`record(U=100, L=100.5)` returned certified with the defect `negative gap`, and the E-n22-k4
-R2 bundles were stored as `optimal` with a 1.086% gap.
+and L in doubt. Before this contract (revision 098642b and earlier) the rule was one-sided
+and certified L above U ([Validation](VALIDATION.md) §2 and §2a).
 
 Every bound records model, graph, scenario set, time grid, and provenance. M3 local
 stationarity must not populate a field named global optimality gap unless a separate valid

@@ -267,8 +267,6 @@ def colgen(p, duals="ipm", nu=8, eps=1e-6, delta_max=0.1, delta_min=1e-9, D=10.0
           else "feasible_limit" if U is not None else "no_incumbent")
     elapsed = time.perf_counter() - t0
     return record("R2", p["name"], st, U=U, L=Lf,
-                  validation="replayed" if U is not None else
-                  "validation_failed" if rp else "not_available",
                   bound_source="r24_exact_pricing" if rcc else "r22_exact_pricing",
                   solver=dict(code=None, message="converged" if converged else "limit"),
                   elapsed=elapsed,

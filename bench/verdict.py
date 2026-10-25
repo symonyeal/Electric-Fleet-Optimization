@@ -31,9 +31,3 @@ def evrp(report, lower, upper, eps=1e-6):
         v += "; report value below a valid bound"
     return dict(L=L, U=U, gap=None if L is None or U is None else (U - L) / max(1, abs(U)),
                 verdict=v)
-
-
-def admitted_lower(results):
-    """The lower bounds of admitted results [(model, record)] whose source is trusted."""
-    return [r["L"] for _, r in results if r.get("L") is not None
-            and r.get("bound_source", "highs_dual") in TRUSTED]

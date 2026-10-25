@@ -17,7 +17,7 @@
 //! A label with cbar + f(j, C - q) > ub cannot complete below ub and is not kept: the least
 //! reduced cost cbar* is exact whenever it is below ub, and every route below ub is reachable.
 
-use std::cmp::Ordering;
+use std::cmp::{Ordering, Reverse};
 use std::collections::BinaryHeap;
 use std::time::Instant;
 
@@ -72,22 +72,21 @@ pub struct Priced {
     pub labels: usize,
 }
 
-struct Done(f64, u32, u32);
+/// (value, label, arc), ordered by value, then label and arc: the key of both heaps below.
+#[derive(Clone, Copy, PartialEq)]
+struct Key(f64, u32, u32);
 
-impl PartialEq for Done {
-    fn eq(&self, o: &Self) -> bool {
-        self.0 == o.0
-    }
-}
-impl Eq for Done {}
-impl PartialOrd for Done {
+impl Eq for Key {}
+impl PartialOrd for Key {
     fn partial_cmp(&self, o: &Self) -> Option<Ordering> {
         Some(self.cmp(o))
     }
 }
-impl Ord for Done {
+impl Ord for Key {
     fn cmp(&self, o: &Self) -> Ordering {
-        self.0.total_cmp(&o.0)
+        self.0
+            .total_cmp(&o.0)
+            .then((self.1, self.2).cmp(&(o.1, o.2)))
     }
 }
 
@@ -197,12 +196,12 @@ impl Graph {
         let mut alive = vec![true];
         let mut at: Vec<Vec<u32>> = vec![Vec::new(); nn];
         let mut heap = BinaryHeap::new();
-        heap.push(Pending(0.0, 0));
+        heap.push(Reverse(Key(0.0, 0, 0))); // pending labels, least load first
         let mut best = f64::INFINITY;
-        let mut done: BinaryHeap<Done> = BinaryHeap::new();
+        let mut done = BinaryHeap::new(); // completions, the ncols least kept
         let mut exact = cap.is_none();
         let mut pops = 0usize;
-        while let Some(Pending(_, k)) = heap.pop() {
+        while let Some(Reverse(Key(_, k, _))) = heap.pop() {
             pops += 1;
             if pops.is_multiple_of(256) && t0.elapsed().as_secs_f64() > time_limit {
                 exact = false;
@@ -225,7 +224,7 @@ impl Graph {
                         let rc = lk.cb + p.l;
                         best = best.min(rc);
                         if rc < -tol {
-                            done.push(Done(rc, k as u32, e as u32));
+                            done.push(Key(rc, k as u32, e as u32));
                             if done.len() > ncols {
                                 done.pop();
                             }
@@ -291,13 +290,13 @@ impl Graph {
                 node.push(j);
                 alive.push(true);
                 at[j].push(id);
-                heap.push(Pending(new.q, id));
+                heap.push(Reverse(Key(new.q, id, 0)));
             }
         }
         let cols: Vec<Column> = done
             .into_sorted_vec()
             .into_iter()
-            .map(|Done(rc, k, last)| {
+            .map(|Key(rc, k, last)| {
                 let mut arcs = vec![last as usize];
                 let mut h = k;
                 while lab[h as usize].parent != ROOT {
@@ -314,26 +313,6 @@ impl Graph {
             cols,
             labels: lab.len(),
         }
-    }
-}
-
-/// A label waiting to be extended, popped least load first.
-struct Pending(f64, u32);
-
-impl PartialEq for Pending {
-    fn eq(&self, o: &Self) -> bool {
-        self.cmp(o) == Ordering::Equal
-    }
-}
-impl Eq for Pending {}
-impl PartialOrd for Pending {
-    fn partial_cmp(&self, o: &Self) -> Option<Ordering> {
-        Some(self.cmp(o))
-    }
-}
-impl Ord for Pending {
-    fn cmp(&self, o: &Self) -> Ordering {
-        o.0.total_cmp(&self.0).then(o.1.cmp(&self.1))
     }
 }
 

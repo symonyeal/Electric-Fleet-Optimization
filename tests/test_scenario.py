@@ -2,7 +2,7 @@
 
 import pytest
 
-from data.scenario import load, slot
+from data.scenario import load
 
 S = "data/scenarios/route100.toml"
 
@@ -24,11 +24,6 @@ def test_values_need_unit_and_source(tmp_path, bad):
     f.write_text(f"[t]\n{bad}\n")
     with pytest.raises(ValueError):
         load(f)
-
-
-def test_slot_is_floor_of_time_over_delta():
-    assert slot(0, 300) == 0 and slot(299, 300) == 0 and slot(300, 300) == 1
-    assert slot(95000, 300) == 316                      # past midnight stays on the grid
 
 
 # Domains (Data §3): each rule refused on its own, before any row is built.

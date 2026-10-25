@@ -7,8 +7,10 @@ reported routing, vehicle-blocking, and charging result.
 revision 098642b) and the changes committed with this file.** Every row below names the test
 that executes it; `python -m pytest -q` runs all of them (`-m "not slow"` skips the four marked
 slow, `-m "not data"` those needing the fetched benchmark or feed, `-m "not gtfs"` the three
-needing the pinned GTFS snapshot). The full suite on 1 October 2026 recorded 365 passing tests
-in 492.63 seconds, with 17 SciPy optimizer warnings in nonlinear checks and no failures.
+needing the pinned GTFS snapshot). The fast suite (`python -m pytest -q -m "not slow"`) on
+24 October 2026 recorded 371 passed and 1 failed in 105 s. The failure is the pre-existing
+`tests/test_charge.py::test_two_barrier_methods_agree[2]`: trust-constr returns NaN under
+SciPy 1.18.1.
 
 What runs where. GitHub Actions runs, on every push, the fast suite (`not data and not slow`)
 with ruff and pip check, and a second job that fetches the pinned EVRP files and runs
@@ -53,7 +55,7 @@ gap claim only under the contract of [Algorithms](ALGORITHMS.md) §8.
 | Site base load | L bills on the open site's meter only: a closed candidate site with L = 10 is not billed and L > G0 does not force it open; an open site is billed 0.5 x 10 = 5 with or without charging in the window, by M1, the enumeration and the replay alike; M4's objective equals its replay; M2 is certified by OA; M3's cost rises by exactly 5 | test_regressions.py (5, 6) | Pass |
 | Terminal energy | A bus returning above s0 B is billed zero restoration, never a credit; with cheap terminal and dear depot energy M1's total is nonnegative and equals the replay and the enumeration | test_regressions.py (7) | Pass |
 | M1 | Equals path-cover enumeration on 6 tiny timetables; replay finds a removed charge; replay traces start at s0 B, stay above the reserve and sum to the charged energy; tree certifies tiny M1 with priority; Route 100 morning bound and replay; IPM relaxation equals highs-ds | test_fleet.py | Pass |
-| M1-Q, M2 subproblems | QP method equals trust-constr; two barrier methods agree to 1e-6; (A5) below the value; derivatives match finite differences | test_charge.py | Pass |
+| M1-Q, M2 subproblems | QP method equals trust-constr; two barrier methods agree to 1e-6; (A5) below the value; derivatives match finite differences | test_charge.py | Pass, except `test_two_barrier_methods_agree[2]` (above) |
 | OA, M2 | Known convex MINLP certified; M2 inside M2-P; z(M2) >= z(M1); bounds nondecreasing | test_oa.py | Pass |
 | R3 | Free charging equals R1 (one station per segment); scenario R3 inside R3-P and replays; fixed-route bound tight | test_recharge.py | Pass |
 | M3, M4 | (14) against integration; local M3 above the M1 bound; M4 against wait-and-see and worst case, replay per scenario | test_extensions.py | Pass |
@@ -139,8 +141,8 @@ provenance-limited or stale: recorded, not shown false, and not admitted to a ve
   textbook barrier, not moved.
 - Route 100 on sourced parameters ([Data](DATA.md) §3) is not yet measured: the four
   full-day runs (`python run_case.py transit route100 M1 --scenario rs1640-stress --time 1800`,
-  likewise `rs1650-stress`, and `rs1640`, `rs1650` at 600 s) were stopped at the user's request
-  4.5 minutes in, and wrote no bundle; they are to be run only under the readings of Data §3
+  likewise `rs1650-stress`, and `rs1640`, `rs1650` at 600 s) were stopped
+  4.5 minutes in and wrote no bundle; they are to be run only under the readings of Data §3
   (normalized demand weight, external depot term, derived stress pack). One probe, not a
   bundle, run before the tariff terms existed and under M1/1, set the 594 kWh pack,
   1.429 kWh/km, eta 0.90 and 5 plugs per loop in the illustrative scenario: in 300 s M1 found

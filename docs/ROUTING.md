@@ -168,9 +168,8 @@ $$
 The bound needs an exact pricing minimum, not an exact master. It is the
 route-space analogue of (A3) in [Algorithms](ALGORITHMS.md), and the Lagrangean
 duality of BT §11.4 applied to the covering rows; the column generation itself is
-BT §6.1. Heuristic pricing
-may add columns but cannot evaluate (R2.2). The final pricing call must be
-exact, or no bound is reported.
+BT §6.1. Heuristic pricing may add columns but cannot evaluate (R2.2); the final
+pricing call must be exact, or no bound is reported.
 
     Input:          instance; route relaxation Omega'; master tolerances delta_k;
                     pricing and time limits
@@ -220,9 +219,9 @@ incumbents, from the restricted master solved as a MILP over the generated
 elementary columns, and from replayed evrp-python solutions. When a replayed
 upper bound meets (R2.2) within tolerance, that solution is certified optimal up
 to floating-point tolerances. [Algorithms](ALGORITHMS.md) §7 advises against
-starting the transit model with branch-and-price. That advice stands: transit
-duty pricing with charging timing is a hard independent problem, whereas R2 prices
-the standard resource-constrained path with a battery reset at stations.
+branch-and-price for the transit model: duty pricing with charging timing is a
+hard independent problem, whereas R2 prices the standard resource-constrained
+path with a battery reset at stations.
 
 **5a. R2-RCC: rounded capacity cuts in the master**
 

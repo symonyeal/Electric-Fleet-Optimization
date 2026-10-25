@@ -28,10 +28,9 @@ charging locations, and electricity prices, determine:
 4. Charging power, state of charge, grid demand, and total modeled cost.
 5. A feasible upper bound, an independently justified lower bound, and the gap.
 
-This is an architectural design. The user asked for the complete design now and
-implementation later, authorized choosing the application on mathematical
-strength and data access, and then named evrp-python as a further reference.
-Numerical parameters below are design choices, not agency facts.
+The applications were chosen on mathematical strength and data access, with
+evrp-python as a further reference. Numerical parameters below are design choices,
+not agency facts.
 
 **2. Why these applications**
 
@@ -174,29 +173,29 @@ an investment recommendation when input costs are illustrative.
 
 **8. Software architecture**
 
-The layout as implemented. Two modules were added to the proposal: `models/milp.py` and
-`models/transit.py` hold the plumbing and the compiled transit instance that formulations
-share, so route and transit formulations depend on them and not on each other; `bench/`
-splits the experiment matrix into case execution, the bundle schema and its check, verdicts,
-reports and figures.
+`models/milp.py` and `models/transit.py` hold the plumbing and the compiled transit
+instance that formulations share, so route and transit formulations depend on them and not on
+each other; `bench/` splits the experiment matrix into case execution, the bundle schema and
+its check, verdicts, reports and figures.
 
 ```text
 data/evrp.py          Read .evrp files by keyword; check counts and provenance
 data/gtfs.py          Read calendars, trips, stops, and shapes
 data/scenario.py      Read declared scenarios; refuse values outside their domains
-models/milp.py        Sparse rows, the HiGHS call and its status names (no model)
+models/milp.py        Sparse rows, the HiGHS call, its status names, the M2-P/R3-P bracket
 models/transit.py     The compiled transit instance: compatibility graph, distances,
                       energies, windows, input digests
 models/paths.py       Station graph, shortest interiors, Pareto station paths
 models/route.py       R0, R1, R1-TR rows, bounds, and objective
-models/colgen.py      R2 master, labeling pricing, bound (R2.2)
+models/colgen.py      R2 master, pricing call, bounds (R2.2), (R2.4), cut separation
 models/recharge.py    R3 rows, perspective loss, cuts (R3.4)-(R3.5)
 models/network.py     M0 flow and matching formulations
 models/fleet.py       M1 rows, bounds, integrality, and objective components
 models/charge.py      M1-Q and M2 values, gradients, and Hessians
 models/taper.py       M3 charging law and independent integration
 models/scenario.py    M4 shared decisions and scenario recourse
-methods/ipm.py        Textbook LP/QP primal-dual method
+methods/ipm.py        Textbook LP/QP primal-dual method: reduction, restoration, (A3)
+methods/native.py     The Rust module efo, refused when built from other sources
 methods/branch.py     Small branch-and-bound using certified LP bounds
 methods/oa.py         Convex outer approximation
 checks/route.py       Independent EVRP replay: coverage, load, battery, stations
@@ -208,6 +207,8 @@ bench/                Cases, bundle schema and check, verdicts, report, figures,
 tests/                Analytical, enumeration, derivative, and integration checks
 run_case.py           One instance, one model, one result bundle
 run_bench.py          Reproduce a declared experiment matrix, fail-closed
+crates/efo-kernels    ng-route labeling; interior-point iteration, sparse LDL'
+crates/efo-py         The PyO3 module efo over efo-kernels
 ```
 
 Use functions and simple immutable records only when they hold a mathematical
@@ -250,7 +251,7 @@ urllib, hashlib, and datetime for the data adapters.
 - Convex and nonconvex continuous subproblems: SciPy `trust-constr`, supplying
   sparse analytic derivatives. Its inequality-constrained route uses a barrier.
 - Optional later cross-check: Ipopt, if a Python 3.14/Windows installation is
-  demonstrated without replacing the user's environment. It is not a dependency
+  demonstrated without replacing the system Python. It is not a dependency
   of the first release and it does not solve integrality.
 - Optional later conic cross-check: a compatible conic solver for fixed-integer
   M2 and R3. This is an independent formulation, not a prerequisite.
@@ -267,14 +268,13 @@ urllib, hashlib, and datetime for the data adapters.
   with its pins ([Routing](ROUTING.md) §9).
 
 The SciPy APIs and solver capabilities were checked in their official
-documentation. Exact version pinning and installation checks belong to phase 1;
-no new dependencies were installed during design.
+documentation; the installed versions are recorded in [Toolchain](TOOLCHAIN.md).
 [SciPy MILP](https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.milp.html),
 [HiGHS IPM](https://docs.scipy.org/doc/scipy/reference/optimize.linprog-highs-ipm.html),
 [trust-constr](https://docs.scipy.org/doc/scipy/reference/optimize.minimize-trustconstr.html),
 [Ipopt](https://coin-or.github.io/Ipopt/).
 
-**10. What a user will receive**
+**10. Deliverables**
 
 For each routing instance: an input manifest, routes with station visits, load
 and battery traces, R0 and R1 values, the R2 bound and its iteration history, and
@@ -291,5 +291,5 @@ without a server.
 The first report answers four narrow questions: which published EVRP values the
 models certify or refute; whether the timetable is feasible under the declared
 equipment assumptions; what extra cost or capacity the nonlinear models require;
-and how effectively interior-point methods support integer optimization. Costs,
-gaps, and runtimes remain unmeasured until implementation.
+and how effectively interior-point methods support integer optimization. The
+measured answers are in [Results](results/README.md) and [Validation](VALIDATION.md).

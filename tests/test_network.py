@@ -7,7 +7,8 @@ import numpy as np
 import pytest
 
 from checks.schedule import replay
-from models.network import compat, m0
+from models.network import m0
+from models.transit import compat
 
 with open("tests/fixtures/route100.json", encoding="utf-8") as f:
     R100 = json.load(f)

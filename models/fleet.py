@@ -39,7 +39,7 @@ import numpy as np
 from checks.certificate import provenance, record
 from checks.schedule import replay_energy
 from data.scenario import billed
-from models.milp import Rows, solve, status
+from models.milp import Rows, dual_bound, solve, status
 from models.transit import compile
 
 VERSION = "M1/2"      # 2: base load on the open site's meter; nonnegative depot restoration
@@ -51,11 +51,6 @@ def tariff(co):
     the day (w0 > w1 wraps across midnight). Absent keys give 1 and the whole day."""
     return (1 + co.get("rider", 0.0), 3600 * co.get("peak_from", 0.0),
             3600 * co.get("peak_to", 24.0))
-
-
-def instance(c, v):
-    """Everything M1 needs from a corridor c and a scenario v: the compiled instance."""
-    return compile(c, v)
 
 
 def rows(c, v, fixed=None, loss=False, inst=None):
@@ -242,10 +237,8 @@ def m1(c, v, name="corridor", fixed=None, time_limit=600.0, gap=1e-6, keep_x=Fal
         duties, plan, infra = solution(M, v, res.x)
         rp = replay_energy(c, v, duties, plan, infra)
     U = rp["cost"] if rp and rp["ok"] else None
-    L = getattr(res, "mip_dual_bound", None) if s in ("optimal", "feasible_limit") else None
+    L = dual_bound(res, s)
     return record("M1", name, s, U=U, L=L,
-                  validation="replayed" if U is not None else
-                  "validation_failed" if rp else "not_available",
                   objective=None if res.x is None else float(res.fun), bound_source="highs_dual",
                   solver=dict(code=int(res.status), message=res.message), elapsed=dt,
                   provenance=provenance(dict(name=name, sha256=c.get("source", {}).get("sha256")),

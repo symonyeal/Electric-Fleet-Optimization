@@ -3,8 +3,7 @@
 This register separates published fleet and benchmark inputs from declared planning
 assumptions, so a reader can identify which quantity drives each modeled outcome.
 
-Observed inputs and declared assumptions are kept apart. Every instance carries a
-manifest: source URL, retrieval date, revision or version, SHA-256, and the
+Every instance carries a manifest: source URL, retrieval date, revision or version, SHA-256, and the
 transformations applied. No checksum is recorded in this design; Phase 1 records
 the EVRP files and Phase 6 the GTFS feed.
 
@@ -89,10 +88,8 @@ Observed inputs: trips, stop times, stops, shapes, calendars, and `block_id`.
 Every agency connection between consecutive Route 100 trips of a block is feasible
 under the deadhead model of M0, so the blocks are a battery-free schedule for these
 trips. They also encode driver and depot rules that M0 does not, and a block may
-serve other routes; their count is a comparison, not a target.
-
-Horizon selection keeps every trip of the chosen service day, including trips
-after midnight, as [Models](MODELS.md) §1 requires.
+serve other routes; their count is a comparison, not a target. The horizon keeps every
+trip of the service day, including those after midnight ([Models](MODELS.md) §1).
 
 **3. Declared engineering scenarios**
 
@@ -136,18 +133,15 @@ TransLink's operation.
 | Charging efficiency eta | 0.90 | CARB 2018, Foothill Transit's on-route charging over a year of utility bills; Altoona measured 0.76-0.91 |
 | Plugs per loop nbar | 5 | `illustrative`. TransLink's 10 on-route overhead chargers (June 2025) are a system-wide count: the source does not place five at each Route 100 loop, nor establish that all 19 buses run this corridor. These figures are context for a reader, never validation or calibration |
 | Energy, on route | 8.38 or 11.37 c/kWh | BC Hydro RS 1640 or RS 1650 |
-| Energy, depot | 8.38 c/kWh | RS 1640 in both files, on the assumption that the depot charges 22:00-06:00, outside RS 1640's demand window. The model does not enforce that window, depot charging capacity or the minimum demand provisions: the depot term is an external energy price ([Models](MODELS.md) §3a) |
+| Energy, depot | 8.38 c/kWh | RS 1640 in both files, on the assumption that the depot charges 22:00-06:00, outside RS 1640's demand window. The depot term is an external energy price; that window, depot charging capacity and the minimum demand provisions are not enforced ([Models](MODELS.md) §3a) |
 | Demand | $13.83 or $2.31 per kW per billing period | RS 1640 (billing demand 06:00-22:00 only) or RS 1650 (whole period). M1 models one day, so the charge enters x 12/365 = 0.4547 or 0.0759 CAD/kW/day: a normalized daily sensitivity weight on the day's peak, not a bill. A bill needs the billing month, a peak shared by all its days, and the minimum and ratchet provisions ([Design](DESIGN.md) §7) |
 | Basic charge | 29.99 c/day per metered site | RS 1640, RS 1650 |
 | Riders | -1.5% | RS 1901 "(1.5)%" read as a credit; RS 1904 0% |
 | Charger power P, depot location, operating band (s0, reserve, smax), deadhead speed, capital and operating costs | - | Not found; `illustrative` |
 
-Model terms the tariff adds, in `models/fleet.py`, `models/taper.py` and, written separately,
-`checks/schedule.py` and `checks/enum_transit.py`: the peak is taken over the slots of
-[`peak_from`, `peak_to`) hours of the day only, wrapping across midnight when `peak_from` >
-`peak_to`; `rider` multiplies every electricity charge; `basic` is charged per open site,
-whose meter also carries its base load L ([Models](MODELS.md) §3). A scenario without these
-keys prices as before. Not modeled: the billing month and its shared peak, the monthly
+The tariff terms (billing window, `rider`, `basic`) are in `models/fleet.py`, `models/taper.py`
+and, written separately, `checks/schedule.py` and `checks/enum_transit.py`
+([Models](MODELS.md) §3, §3a). A scenario without these keys prices as before. Not modeled: the billing month and its shared peak, the monthly
 minimum charge (50% of the highest winter demand charge), the discounts for primary-voltage
 metering or customer transformation, depot charging, and taxes. Phase 12's four full-day runs
 remain open and are run only under this reading.

@@ -12,6 +12,8 @@ below the peak (16) that M3's rows use. The cost is M1's: each open site's meter
 at its base load L, and the depot restores max(0, s0 B - e) overnight (Models §3).
 """
 
+import itertools
+
 import numpy as np
 from scipy.integrate import solve_ivp
 from scipy.optimize import Bounds, NonlinearConstraint, linprog, minimize
@@ -20,7 +22,6 @@ from data.scenario import billed
 from methods.branch import split
 from models.charge import fixed_box
 from models.fleet import linear, rows, solution, tariff
-import itertools
 
 VERSION = "M3/2"      # follows M1/2
 

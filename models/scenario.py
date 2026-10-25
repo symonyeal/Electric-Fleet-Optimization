@@ -19,7 +19,7 @@ from checks.certificate import provenance, record
 from checks.schedule import replay_energy
 from data.scenario import weights
 from models.fleet import rows, solution
-from models.milp import status
+from models.milp import dual_bound, status
 
 VERSION = "M4/2"      # follows M1/2
 
@@ -92,7 +92,7 @@ def m4(c, v, scenarios, name="corridor", fixed=None, worst=False, time_limit=600
             costs.append(rp["cost"])
         if all(p_["ok"] for p_ in per):
             U = max(costs) if worst else float(np.dot([pw for pw, _ in scenarios], costs))
-    L = getattr(res, "mip_dual_bound", None) if st in ("optimal", "feasible_limit") else None
+    L = dual_bound(res, st)
     return record("M4", name, st, U=U, L=L,
                   validation="replayed" if U is not None else
                   "validation_failed" if per else "not_available",

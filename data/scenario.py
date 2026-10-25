@@ -118,11 +118,6 @@ def load(path):
         return validate(_walk(tomllib.load(f), "", prov)), prov
 
 
-def slot(t, delta):
-    """Slot index of time t (seconds after midnight of the service day, possibly >= 86400)."""
-    return math.floor(t / delta)
-
-
 def billed(t, w0, w1):
     """t (seconds, possibly past midnight) lies in the billing window [w0, w1) of its day;
     w0 > w1 wraps across midnight."""

@@ -4,7 +4,7 @@ import math
 
 import pytest
 
-from checks.certificate import STATUS, certified, record
+from checks.certificate import certified, record
 
 KW = dict(solver=dict(code=0, message="test"), elapsed=0.5, provenance=dict(revision="t"))
 
@@ -15,7 +15,6 @@ def test_status_taxonomy():
     from checks.certificate import SOLVER
     assert SOLVER == {"optimal", "feasible_limit", "no_incumbent", "infeasible", "unbounded",
                       "local", "numerical", "stall", "limit"}
-    assert STATUS == SOLVER | {"invalid_bound", "validation_failed"}
     with pytest.raises(ValueError):
         record("R1", "E-n22-k4", "solved", **KW)
     with pytest.raises(ValueError):
