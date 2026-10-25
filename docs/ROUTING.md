@@ -263,12 +263,19 @@ and 8): plain R2 leaves a gap to z* on four. With the cuts the gap closes on thr
 and on the fourth (seed 5, n = 6) the bound rises from 404.39 to 410.44 against
 z* = 420.82. The bound never exceeds z*.
 
-On the 2019 E instances (bundles at revision 2533ebe, 1,800 s each), R2-RCC
-certifies E-n22-k4 at 384.678093 (22 cuts, 34 s) and E-n23-k3 at 571.947383
-(11 cuts, 505 s), and brackets E-n30-k3 at [508.498041, 509.470415], 0.19%
-(12 cuts, at the limit). Without cuts the gaps were open, 1.79% and 8.09%. On
-E-n33-k4 no exact pricing call completed, so no cut was separated and no bound
-was reported. There the bottleneck is pricing, not the relaxation.
+On the 2019 E instances (bundles at revision 05b10dd, 1,800 s each, Rust
+pricing of §5), R2-RCC certifies the four smallest: E-n22-k4 at 384.678093
+(2 s), E-n23-k3 at 571.947383 (33 s), E-n30-k3 at 509.470415 (35 s) and
+E-n33-k4 at 840.145836 (66 s). At revision 2533ebe, with Python pricing, the
+first two took 34 s and 505 s, E-n30-k3 ended bracketed at 0.19%, and on
+E-n33-k4 no exact pricing call completed. At the duals of each converging call,
+the Python labeling of that revision, which has no completion bound, gives the
+same min(0, c̄*) to within 1e-13. On E-n51-k5, E-n76-k7 and E-n101-k8 the
+relaxation converges in 13 s, 50 s and 332 s, to valid bounds 527.546249,
+681.374346 and 822.793692, all below the published values. The restricted
+MILP over the generated columns gives incumbents 24.7%, 28.3% and 33.5% above
+those bounds. These gaps belong to the relaxation and the incumbent, which only
+branching would close, not to pricing time.
 
 **6. R3: partial recharging with resistive loss (convex MINLP)**
 

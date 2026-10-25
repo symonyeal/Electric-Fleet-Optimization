@@ -50,7 +50,7 @@ Recent decisions affecting current work:
 ### Pending Todos
 
 - Phase 12: `python run_case.py transit route100 M1 --scenario rs1640-range --time 1800`, likewise rs1650-range, then rs1640 and rs1650 at 600 s; then `python run_bench.py`
-- Probe whether one exact pricing call completes on E-n51-k5 before spending runs on E-n51-k5 to E-n101-k8
+- [2026-10-24] Done: with Rust pricing (05b10dd) R2-RCC certifies E-n22-k4 to E-n33-k4 and bounds E-n51-k5, E-n76-k7, E-n101-k8 (gaps 24.7-33.5%, from weak restricted-MILP incumbents). Next for those three: branching or a better incumbent, not pricing
 - Why the textbook IPM master hits its iteration limit on E-n30-k3 (122 of 156 outer iterations)
 - A barrier fallback for degenerate fixed-route R3 points (alpha = 1e-3 grid row)
 
