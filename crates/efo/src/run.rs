@@ -172,19 +172,23 @@ pub fn replayed(root: &Path, b: &Bundle) -> Result<(Option<f64>, Files), String>
             if m == "R2" && b.case.far.is_none() {
                 seeds(root, &p, &mut files)?;
             }
+            // read even without routes, so that the digests match those the run recorded
+            let sc = (m == "R3")
+                .then(|| recharge(root, &b.case, &mut files))
+                .transpose()?;
             let routes: Option<Vec<Vec<usize>>> =
                 serde_json::from_value(get("routes")).map_err(json)?;
             match (routes, m) {
                 (None, _) => None,
                 (Some(r), "R3") => {
-                    let sc = recharge(root, &b.case, &mut files)?;
+                    let sc = sc.as_ref().unwrap();
                     let ch: BTreeMap<String, (f64, f64)> =
                         serde_json::from_value(get("charges")).map_err(json)?;
                     let ch = ch.into_iter().map(|(k, v)| {
                         let (a, z) = k.split_once(':').unwrap_or(("0", "0"));
                         ((a.parse().unwrap_or(0), z.parse().unwrap_or(0)), v)
                     });
-                    let rp = replay::replay_charge(&p, &sc, &r, &ch.collect());
+                    let rp = replay::replay_charge(&p, sc, &r, &ch.collect());
                     rp.ok.then_some(rp.cost)
                 }
                 (Some(r), _) => Some(replay::replay(&p, &r, true))

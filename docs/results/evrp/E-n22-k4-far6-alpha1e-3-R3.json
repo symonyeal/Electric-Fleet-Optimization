@@ -1,0 +1,99 @@
+{
+  "record": {
+    "model": "R3",
+    "instance": "E-n22-k4[2,3,4,5,6,22]",
+    "status": "stall",
+    "solver_status": "stall",
+    "validation_status": "not_available",
+    "certificate_status": "open",
+    "U": null,
+    "L": 293.8147414885405,
+    "gap_rel": null,
+    "certified": false,
+    "defect": null,
+    "bound_source": "oa_master_dual",
+    "objective": null,
+    "message": "outer approximation, 4 iterations",
+    "elapsed": 496.2991291,
+    "detail": {
+      "alpha": 0.001,
+      "arcs": 374,
+      "charges": null,
+      "cuts": 1010,
+      "formulation": "R3/1",
+      "iterations": [
+        {
+          "L": 293.8147414885404,
+          "U": null,
+          "cuts": 1008,
+          "k": 1,
+          "sub": "limit",
+          "violation": 0.3251798358458089
+        },
+        {
+          "L": 293.8147414885404,
+          "U": null,
+          "cuts": 1009,
+          "k": 2,
+          "sub": "limit",
+          "violation": 0.06968139339556956
+        },
+        {
+          "L": 293.8147414885405,
+          "U": null,
+          "cuts": 1010,
+          "k": 3,
+          "sub": "limit",
+          "violation": 0.0
+        },
+        {
+          "L": 293.8147414885405,
+          "U": null,
+          "cuts": 1010,
+          "k": 4,
+          "sub": "limit",
+          "violation": 0.0
+        }
+      ],
+      "length": null,
+      "max_iter": 60,
+      "routes": null,
+      "time_limit": 1800.0
+    }
+  },
+  "case": {
+    "track": "evrp",
+    "instance": "E-n22-k4",
+    "model": "R3",
+    "time": 1800.0,
+    "far": 6,
+    "until": null,
+    "scenario": null,
+    "battery": null,
+    "alpha": 0.001
+  },
+  "code": {
+    "commit": "8f07c5cfed72a6f9a1002807fe1fb4f1190a5611",
+    "dirty": false
+  },
+  "host": {
+    "cpu": "AMD Ryzen 7 PRO 6850U with Radeon Graphics",
+    "os": "windows",
+    "threads": "16"
+  },
+  "inputs": {
+    "data/fetched/evrp-2019/E-n22-k4.evrp": "cc43d4be3c0f6f8435bfa9f1fb60eede083e93ec58313909d5ee7f6a1034a89b",
+    "data/scenarios/r3.toml": "8241f1b7e95267350b3b7e95b2fb8e4206988a21ba36d8f3b6f82c3aea055b11"
+  },
+  "command": [
+    "evrp",
+    "E-n22-k4",
+    "R3",
+    "--far",
+    "6",
+    "--alpha",
+    "1e-3",
+    "--time",
+    "1800"
+  ]
+}
