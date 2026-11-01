@@ -43,6 +43,7 @@ jobs:
         run: |
           url=https://raw.githubusercontent.com/NeiH4207/evrp-python/16d3499799ab7aa7bc3f11a5eaf8604947389462/benchmarks
           while read -r sum key; do
+            key=${key%$'\r'}  # a Windows checkout ends lines with CRLF
             mkdir -p "data/fetched/$(dirname "$key")"
             curl -fsSL "$url/$key" -o "data/fetched/$key"
           done < data/evrp.sha256
