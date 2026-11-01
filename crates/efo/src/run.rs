@@ -23,8 +23,18 @@ fn rel(root: &Path, p: &Path) -> String {
         .replace('\\', "/")
 }
 
+/// Record the digest of a tracked text input, CRLF read as LF, so that a Windows and a Linux
+/// checkout of one commit agree.
 fn sha(root: &Path, p: &Path, files: &mut Files) -> Result<(), String> {
-    files.insert(rel(root, p), evrp::sha256(p)?);
+    let text = fs::read(p).map_err(|e| format!("{}: {e}", p.display()))?;
+    let lf: Vec<u8> = (0..text.len())
+        .filter(|&k| !(text[k] == b'\r' && text.get(k + 1) == Some(&b'\n')))
+        .map(|k| text[k])
+        .collect();
+    files.insert(
+        rel(root, p),
+        format!("{:x}", <sha2::Sha256 as sha2::Digest>::digest(&lf)),
+    );
     Ok(())
 }
 
