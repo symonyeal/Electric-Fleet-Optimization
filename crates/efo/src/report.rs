@@ -251,7 +251,24 @@ fn physics_rows(c: &Collected) -> Vec<String> {
             .to_owned(),
         "|---|---|---:|---:|---:|---:|---:|---|---:|".to_owned(),
     ];
-    for (_, b, _) in c.admitted.iter().filter(|(_, b, _)| b.case.alpha.is_some()) {
+    let mut rows: Vec<&Bundle> = c
+        .admitted
+        .iter()
+        .map(|(_, b, _)| b)
+        .filter(|b| b.case.alpha.is_some())
+        .collect();
+    rows.sort_by(|a, z| {
+        let k = |b: &Bundle| {
+            (
+                b.case.model.clone(),
+                b.case.far,
+                b.case.battery.map(f64::to_bits),
+            )
+        };
+        k(a).cmp(&k(z))
+            .then(a.case.alpha.partial_cmp(&z.case.alpha).unwrap())
+    });
+    for b in rows {
         let (base_model, measure) = if b.case.model == "R3" {
             ("R1", "length")
         } else {
@@ -328,7 +345,8 @@ pub fn render(root: &Path) -> (String, Vec<String>) {
                 "| {} | {} |",
                 p.strip_prefix(root.join("docs/results"))
                     .unwrap_or(p)
-                    .display(),
+                    .to_string_lossy()
+                    .replace('\\', "/"),
                 why.join("; ")
             );
         }

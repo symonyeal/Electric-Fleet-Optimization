@@ -1,0 +1,85 @@
+{
+  "record": {
+    "model": "R1",
+    "instance": "E-n22-k4[2,3,4,5,6,22,21,8]",
+    "status": "optimal",
+    "solver_status": "optimal",
+    "validation_status": "replayed",
+    "certificate_status": "certified",
+    "U": 272.9611713967092,
+    "L": 272.9611713967091,
+    "gap_rel": 2.082472703716325e-16,
+    "certified": true,
+    "defect": null,
+    "bound_source": "highs_dual",
+    "objective": 272.9611713967091,
+    "message": "HiGHS optimal",
+    "elapsed": 9.5743179,
+    "detail": {
+      "formulation": "R1/1",
+      "mip_rel_gap": 1e-7,
+      "nodes": null,
+      "paths": 404,
+      "replay": {
+        "defects": [],
+        "ok": true
+      },
+      "routes": [
+        [
+          1,
+          17,
+          3,
+          2,
+          4,
+          5,
+          12,
+          1
+        ],
+        [
+          1,
+          16,
+          9,
+          6,
+          14,
+          8,
+          7,
+          1
+        ]
+      ],
+      "rows": 139,
+      "time_limit": 600.0
+    }
+  },
+  "case": {
+    "track": "evrp",
+    "instance": "E-n22-k4",
+    "model": "R1",
+    "time": 600.0,
+    "far": 8,
+    "until": null,
+    "scenario": null,
+    "battery": null,
+    "alpha": null
+  },
+  "code": {
+    "commit": "8f07c5cfed72a6f9a1002807fe1fb4f1190a5611",
+    "dirty": false
+  },
+  "host": {
+    "cpu": "AMD Ryzen 7 PRO 6850U with Radeon Graphics",
+    "os": "windows",
+    "threads": "16"
+  },
+  "inputs": {
+    "data/fetched/evrp-2019/E-n22-k4.evrp": "cc43d4be3c0f6f8435bfa9f1fb60eede083e93ec58313909d5ee7f6a1034a89b"
+  },
+  "command": [
+    "evrp",
+    "E-n22-k4",
+    "R1",
+    "--far",
+    "8",
+    "--time",
+    "600"
+  ]
+}

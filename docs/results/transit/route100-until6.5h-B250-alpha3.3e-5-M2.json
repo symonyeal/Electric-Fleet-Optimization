@@ -1,0 +1,149 @@
+{
+  "record": {
+    "model": "M2",
+    "instance": "route100-until6.5h-B250-alpha3.3e-5",
+    "status": "optimal",
+    "solver_status": "optimal",
+    "validation_status": "replayed",
+    "certificate_status": "certified",
+    "U": 5674.267831921746,
+    "L": 5674.2678319159295,
+    "gap_rel": 1.0250165818958276e-12,
+    "certified": true,
+    "defect": null,
+    "bound_source": "oa_master_dual",
+    "objective": null,
+    "message": "outer approximation, 1 iterations",
+    "elapsed": 1.1232637,
+    "detail": {
+      "alpha": 0.000033,
+      "cuts": 396,
+      "formulation": "M2/2",
+      "iterations": [
+        {
+          "L": 5674.2678319159295,
+          "U": 5674.267831921746,
+          "cuts": 396,
+          "k": 1,
+          "sub": "optimal",
+          "violation": 0.0
+        }
+      ],
+      "max_iter": 40,
+      "schedule": {
+        "duties": [
+          [
+            "15462049",
+            "15461897",
+            "15462075"
+          ],
+          [
+            "15462050",
+            "15461929",
+            "15462055"
+          ],
+          [
+            "15462051",
+            "15461896",
+            "15462013"
+          ],
+          [
+            "15462093",
+            "15461984",
+            "15462067"
+          ],
+          [
+            "15462003",
+            "15461944"
+          ],
+          [
+            "15462052",
+            "15461935"
+          ],
+          [
+            "15462053",
+            "15461954"
+          ],
+          [
+            "15462056",
+            "15461971"
+          ],
+          [
+            "15462025",
+            "15461895"
+          ],
+          [
+            "15462027"
+          ],
+          [
+            "15462058"
+          ],
+          [
+            "15462020"
+          ],
+          [
+            "15462094"
+          ]
+        ],
+        "fleet": 13,
+        "infra": {},
+        "plan": {},
+        "replay": {
+          "cost": 5674.267831921746,
+          "defects": [],
+          "ok": true,
+          "parts": {
+            "basic": 0.0,
+            "buses": 5200.0,
+            "deadhead": 394.6490213288469,
+            "depot_energy": 79.61881059289861,
+            "energy": 0.0,
+            "peak": -0.0,
+            "plugs": -0.0,
+            "sites": 0.0,
+            "upgrade": -0.0
+          }
+        }
+      },
+      "time_limit": 1800.0,
+      "trips": 26
+    }
+  },
+  "case": {
+    "track": "transit",
+    "instance": "route100",
+    "model": "M2",
+    "time": 1800.0,
+    "far": null,
+    "until": 6.5,
+    "scenario": null,
+    "battery": 250.0,
+    "alpha": 0.000033
+  },
+  "code": {
+    "commit": "8f07c5cfed72a6f9a1002807fe1fb4f1190a5611",
+    "dirty": false
+  },
+  "host": {
+    "cpu": "AMD Ryzen 7 PRO 6850U with Radeon Graphics",
+    "os": "windows",
+    "threads": "16"
+  },
+  "inputs": {
+    "data/corridors/route100.json": "c5dae9e94fd103d13f78135166566b7d81e45a46c92df4ab19714790d31f11ac",
+    "data/scenarios/route100.toml": "74f36f0dd188bc2d9db5e1e573ab08af8b8569028010742b1d277c600df86dfa"
+  },
+  "command": [
+    "transit",
+    "route100",
+    "M2",
+    "--until",
+    "6.5",
+    "--battery",
+    "250",
+    "--alpha",
+    "3.3e-5",
+    "--time",
+    "1800"
+  ]
+}

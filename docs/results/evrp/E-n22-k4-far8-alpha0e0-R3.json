@@ -1,0 +1,120 @@
+{
+  "record": {
+    "model": "R3",
+    "instance": "E-n22-k4[2,3,4,5,6,22,21,8]",
+    "status": "stall",
+    "solver_status": "stall",
+    "validation_status": "replayed",
+    "certificate_status": "open",
+    "U": 309.07230777692774,
+    "L": 246.4389746092739,
+    "gap_rel": 0.20264944995609022,
+    "certified": false,
+    "defect": null,
+    "bound_source": "oa_master_dual",
+    "objective": null,
+    "message": "outer approximation, 2 iterations",
+    "elapsed": 1200.5236196,
+    "detail": {
+      "alpha": 0.0,
+      "arcs": 642,
+      "charges": {
+        "0:1": [
+          39.08728625224854,
+          0.39087286256029063
+        ],
+        "1:3": [
+          8.422545795808732,
+          0.08422545799580955
+        ],
+        "2:3": [
+          4.383118647275011,
+          0.05000000003774583
+        ]
+      },
+      "cuts": 2304,
+      "formulation": "R3/1",
+      "iterations": [
+        {
+          "L": 246.4389746092739,
+          "U": 309.07230777692774,
+          "cuts": 1728,
+          "k": 1,
+          "sub": "optimal",
+          "violation": 0.0
+        },
+        {
+          "L": 246.4389746092739,
+          "U": 309.07230777692774,
+          "cuts": 2304,
+          "k": 2,
+          "sub": "optimal",
+          "violation": 0.0
+        }
+      ],
+      "length": 278.24412557866924,
+      "max_iter": 60,
+      "routes": [
+        [
+          1,
+          17,
+          2,
+          3,
+          6,
+          9,
+          1
+        ],
+        [
+          1,
+          5,
+          4,
+          12,
+          1
+        ],
+        [
+          1,
+          7,
+          8,
+          14,
+          1
+        ]
+      ],
+      "time_limit": 1800.0
+    }
+  },
+  "case": {
+    "track": "evrp",
+    "instance": "E-n22-k4",
+    "model": "R3",
+    "time": 1800.0,
+    "far": 8,
+    "until": null,
+    "scenario": null,
+    "battery": null,
+    "alpha": 0.0
+  },
+  "code": {
+    "commit": "8f07c5cfed72a6f9a1002807fe1fb4f1190a5611",
+    "dirty": false
+  },
+  "host": {
+    "cpu": "AMD Ryzen 7 PRO 6850U with Radeon Graphics",
+    "os": "windows",
+    "threads": "16"
+  },
+  "inputs": {
+    "data/fetched/evrp-2019/E-n22-k4.evrp": "cc43d4be3c0f6f8435bfa9f1fb60eede083e93ec58313909d5ee7f6a1034a89b",
+    "data/scenarios/r3.toml": "8241f1b7e95267350b3b7e95b2fb8e4206988a21ba36d8f3b6f82c3aea055b11"
+  },
+  "command": [
+    "evrp",
+    "E-n22-k4",
+    "R3",
+    "--far",
+    "8",
+    "--alpha",
+    "0",
+    "--time",
+    "1800"
+  ]
+}
