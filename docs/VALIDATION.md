@@ -1,164 +1,68 @@
 # Validation
 
-This page records the independent replay, formulation, and analytical checks behind each
-reported routing, vehicle-blocking, and charging result.
+This page records the independent replay, formulation, and analytical checks behind each reported routing, vehicle-blocking, and
+charging result, and the rule by which a result is admitted.
 
-**Status: record of executed checks, the result-integrity repair of 1 October 2026 (audited
-revision 098642b) and the changes committed with this file.** Every row below names the test
-that executes it; `python -m pytest -q` runs all of them (`-m "not slow"` skips the four marked
-slow, `-m "not data"` those needing the fetched benchmark or feed, `-m "not gtfs"` the three
-needing the pinned GTFS snapshot). The fast suite (`python -m pytest -q -m "not slow"`) on
-24 October 2026 recorded 371 passed and 1 failed in 105 s. The failure is the pre-existing
-`tests/test_charge.py::test_two_barrier_methods_agree[2]`: trust-constr returns NaN under
-SciPy 1.18.1.
-
-What runs where. GitHub Actions runs, on every push, the fast suite (`not data and not slow`)
-with ruff and pip check, and a second job that fetches the pinned EVRP files and runs
-`data and not gtfs and not slow`. The GTFS tests need the snapshot of 25 September 2026, which
-TransLink has since replaced and which is not committed (Data §2), so they run only on a
-machine holding it; the four slow tests run locally. A row below marked *local* is not
-re-executed by CI.
+The gates are `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets --locked -- -D warnings` and `cargo test
+--workspace --locked --release`. Results, with their timings, are in [Results](results/README.md); this page states no measured
+values.
 
 **1. What counts as evidence**
 
-A result is accepted when a computation that does not share its code agrees with
-it: a second formulation, a brute-force enumeration, a closed form, a textbook
-example, a second solver, or an independent replay of the returned solution.
-Agreement of a model with itself under a second solver method is weaker than
-agreement with a second formulation, and is labeled so.
+A result is accepted when a computation that does not share its code agrees with it: a second formulation, a brute-force
+enumeration, a closed form, a textbook example, a second solver, or an independent replay of the returned solution. Agreement of
+a model with itself under a second solver method is weaker than agreement with a second formulation, and is labeled so. The
+replays and the enumeration oracles are written from the rules of the problem, not from the formulations they check.
 
-Tolerances are stated with each check. Unless stated otherwise: objective
-agreement within 1e-6 relative, feasibility within 1e-7 in original units, and a
-gap claim only under the contract of [Algorithms](ALGORITHMS.md) §8.
+Tolerances are stated with each check. Unless stated otherwise: objective agreement within 1e-6 relative, feasibility within
+1e-7 in original units, and a gap claim only under the contract of [Algorithms](ALGORITHMS.md) §6.
 
 **2. Checks by component**
 
-| Component | Check | Test (tests/...) | Result |
-| --- | --- | --- | --- |
-| Result contract | Solver, validation and certificate status kept apart, public status derived (`optimal` iff certified); two-sided gap rule: U=100, L=100.5 is `invalid_bound`, never certified with a defect; a 1e-5 crossing within tolerance is certified and reported raw; solver optimal with failed replay is `validation_failed`; an objective disagreeing with the replay withholds the certificate; OA stops on a crossed bound; stored contradictions (the E-n22-k4 R2 bundles of eff961f) are found; gap only with both bounds; solver code, time and provenance required; revision fixed at process start; host named | test_certificate.py, test_regressions.py (1, 2, 9) | Pass |
-| EVRP reader | 41 files verify SHA-256 and parse; both header variants; two NAME mismatches pinned | test_evrp_data.py | Pass |
-| Route replay | Each defect of the hand fixtures named; valid routes at hand-computed lengths; evrp-python tours convert and replay | test_route_replay.py | Pass |
-| Toolchain | milp dual bound; highs-ipm interior points, no early duals; trust-constr accuracy follows its barrier parameter | test_toolchain.py | Pass |
-| Primal-dual LP | Vanderbei (2.1) and ex. 3.1; 20 random LPs and 11 further cases against highs-ds; nonzero lower bounds | test_ipm.py | Pass |
-| Primal-dual LP | (A3) at every iterate below the optimum; infeasible and unbounded examples never optimal; early stop gives interior duals; large-bound counterexamples of the Phase 2 verification | test_ipm.py | Pass |
-| Primal-dual LP | Normal equations agree with the quasi-definite system; standard() leaves its input untouched | test_ipm.py | Pass |
-| Primal-dual QP | 10 random convex QPs against exact active-set enumeration | test_ipm.py | Pass |
-| Convex constraints | Disc: closed-form optimum and multiplier; separable loss rows inside a 200-piece tangent/secant bracket | test_ipm.py | Pass |
-| Station paths | Hand-computed Pareto set; brute-force dominance on E-n22-k4 | test_paths.py | Pass |
-| R1, R1-TR | Agree with exhaustive enumeration on the fixture, 8 self-made and 3 E-n22-k4 sub-instances; every solution replays; z(R0) <= z(R1); infeasibility detected | test_route_models.py | Pass |
-| Branch-and-bound | 0-1 programs and tiny R1 reach HiGHS's optimum with textbook, early-stopped and highs-ipm nodes; bounds nondecreasing; each early-stopped node's bound below its exact LP; validation required for incumbents; the hidden-fraction counterexample returns 1e8 at (1, 0), not 1e8 + 1; a refused, exactly integral candidate keeps its bound (L = -2, `validation_failed`); the default check reads the original rows | test_branch.py, test_regressions.py (3, 4) | Pass |
-| R2 | Exact pricing equals brute force over all elementary routes; converged bound within tolerance of the full set-partitioning LP with both dual sources; bound below R1 at every iteration; status optimal only when certified; one deadline: every master, pricing and restricted-MILP call receives at most the time left, and a 0.6 s run ends within 0.25 s of it | test_colgen.py, test_regressions.py (15) | Pass |
-| GTFS | Times past midnight; calendar then exceptions; Route 100 on 2026-10-07: 219 trips, 23 blocks; holiday runs Sunday service; fixture equals the snapshot | test_gtfs.py | Pass |
-| M0 | Matching LP, min-cost flow and Hopcroft-Karp agree; Dilworth on 10 timetables; IPM midpoint not rounded; Route 100 fleet 16 <= 23 blocks | test_network.py | Pass |
-| Scenarios | Values need unit and source; one test per domain rule (eta, the battery band, positive and nonnegative values, costs, rider, nbar, hbar, L, finite values); billing windows whole and nonempty, wrapping across midnight identically in data/ and checks/; one site per stop; every committed scenario valid; M4 weights refused before any row is built | test_scenario.py, test_regressions.py (8) | Pass |
-| Tariff | Without tariff keys M1's rows and costs are unchanged; with BC Hydro RS 1640 riders, basic charge and a demand window from 06:00 or 07:30, M1, the enumeration and the replay agree on 6 tiny timetables; the 07:30 window moves charging and lowers the optimum; rider and basic charge by hand; a window without charging bills no demand when L = 0 | test_fleet.py | Pass |
-| Site base load | L bills on the open site's meter only: a closed candidate site with L = 10 is not billed and L > G0 does not force it open; an open site is billed 0.5 x 10 = 5 with or without charging in the window, by M1, the enumeration and the replay alike; M4's objective equals its replay; M2 is certified by OA; M3's cost rises by exactly 5 | test_regressions.py (5, 6) | Pass |
-| Terminal energy | A bus returning above s0 B is billed zero restoration, never a credit; with cheap terminal and dear depot energy M1's total is nonnegative and equals the replay and the enumeration | test_regressions.py (7) | Pass |
-| M1 | Equals path-cover enumeration on 6 tiny timetables; replay finds a removed charge; replay traces start at s0 B, stay above the reserve and sum to the charged energy; tree certifies tiny M1 with priority; Route 100 morning bound and replay; IPM relaxation equals highs-ds | test_fleet.py | Pass |
-| M1-Q, M2 subproblems | QP method equals trust-constr; two barrier methods agree to 1e-6; (A5) below the value; derivatives match finite differences | test_charge.py | Pass, except `test_two_barrier_methods_agree[2]` (above) |
-| OA, M2 | Known convex MINLP certified; M2 inside M2-P; z(M2) >= z(M1); bounds nondecreasing | test_oa.py | Pass |
-| R3 | Free charging equals R1 (one station per segment); scenario R3 inside R3-P and replays; fixed-route bound tight | test_recharge.py | Pass |
-| M3, M4 | (14) against integration; local M3 above the M1 bound; M4 against wait-and-see and worst case, replay per scenario | test_extensions.py | Pass |
-| Bundles and report | Multi-station segments counted; cases named as run_case writes them; source digest independent of line endings; atomic writes leave no partial file; verdicts by the two-sided rule; legacy bundles need a retaining migration entry; a changed scenario invalidates a transit bundle; dirty, old-formulation and contradictory bundles are refused; a failed child process fails run_bench and leaves both reports untouched; --missing reruns absent, stale and unreadable bundles; invalid track/model pairs fail before any data is read | test_bench.py, test_regressions.py (10-14) | Pass |
+| Component | Check |
+| --- | --- |
+| Result contract (`cert.rs`) | Two-sided gap rule: U = 100, L = 100.5 is `invalid_bound`, never certified, with a defect; a 1e-5 crossing within tolerance is certified and reported raw; the stored public fields are what the rule derives |
+| Scenarios | Every committed scenario loads; an out-of-domain efficiency, a reserve above s0, a bare number, half a billing window and a stop owned by two sites are each refused; the billing window wraps past midnight |
+| EVRP reader, route replay | The tiny fixture reads as written; each defect kind is named on hand-made routes; the enumerated optimum replays at its length |
+| Kernel | A textbook LP by the normal equations; a convex row against its closed-form optimum; the quasi-definite LDL' solve; duplicate entries summed and mirrored |
+| Barrier wrapper | A row side tight on the box becomes an equality, not a slack in [0, 0] (that slack made every M2 subproblem on Route 100 numerical) |
+| Station paths | Path counts equal those of the previous implementation on 5 fixtures |
+| R1 | Equals exhaustive enumeration on 5 fixtures; a battery too short for any customer is infeasible for both |
+| R2 | Exact pricing equals brute force over all elementary routes on 3 fixtures; on 5 fixtures the run converges, L lies below and U above the enumerated optimum, and the status is `optimal` only when the gap is closed |
+| R3 | With free charging equals R1 when R1's routes pass at most one station per segment, and is never below it; under the declared scenario it certifies and its replayed length is at most its cost |
+| M0 | 16 buses on Route 100 (21041 compatible pairs, 23 blocks, 0 violations), certified by the replay |
+| M1 | Equals tiny-timetable enumeration on 6 seeds, and the free model equals the previous implementation; base load: a site too dear to open stays closed whether L fits its capacity or not; an open site bills L x peak price even when no slot of its billing window can charge, by M1, the enumeration and the replay alike |
+| M2, OA | At fixed integers the barrier equals the HiGHS LP at alpha = 0 and is at least it at alpha > 0; M2 by OA equals the previous implementation on two tiny seeds; OA certifies the integer minimum of a convex bowl and stops as `numerical` when a replay under-reports U |
 
-Defects these checks found, each now pinned by a test: the IPM's stopping rule under
-large bounds (Phase 2 verifier); standard() mutating its sparse input; a precedence
-error in R1-TR's load row; bundle revisions stamped at completion rather than at start, and marked dirty by
-run_bench.py's own rewrite of README.md; the redundant master bound lam <= 1; a Jacobian written into
-CSR data in coordinate order; R3's one-sided charge rows; the tree's node budget on M1
-without branching priority. The audit of 1 October 2026 added those of §2a.
+The certificate and base-load tests pin defects found in an audit of an earlier revision: a one-sided certificate that
+certified L above U, and base load entering only the rows with charging variables.
 
-**2a. The audit of 1 October 2026**
+**3. How results are admitted**
 
-Each finding is classified; only the first class is a demonstrated wrong answer.
-`tests/test_regressions.py` was written first and failed at 098642b (33 of its 36 tests then;
-the 3 that passed check the open site with in-window charging, which already agreed).
+A result is a bundle, a JSON file at `docs/results/<track>/<stem>.json`, holding the record of the result contract, the case
+(track, instance, model, options), the code commit and a flag for whether the code differed from it, the host (processor and
+thread count; elapsed times compare only on one host), the SHA-256 of every input file, and the command line. `efo report`
+regenerates `docs/results/README.md` and the README block from the admitted bundles. A bundle is admitted when:
 
-| Class | Finding | Effect on published numbers |
-| --- | --- | --- |
-| Demonstrated correctness failure | The certificate was one-sided: L above U certified, with the defect `negative gap` beside `certified=true` | None published crossed; the E-n22-k4 R2 bundles carried `optimal` with a 1.086% gap and are now `invalid` (Results) |
-| Demonstrated correctness failure | Branch-and-bound certified 1e8 + 1 against the optimum 1e8: a fraction 1e-7 below tol_int was rounded to an infeasible point and the node pruned | No published result uses the tree |
-| Latent defect, hidden by zero inputs | Base load L entered only rows with charging variables: closed sites billed (+5 CAD on a tiny instance), L > G0 forced a site open, out-of-window demand omitted (-5) by model and enumeration; M2 and M4 inherited it, M3's cost omitted it | Every Route 100 scenario has L = 0 |
-| Latent defect, hidden by prices | Depot restoration was signed: a bus returning above s0 B earned a credit (-24.46 CAD on a tiny instance) | No committed scenario prices terminal energy below depot energy by enough to trigger it; the M1 bundles are stale under the new formulation all the same |
-| Latent defect | The scenario reader checked units and sources, not domains; M4 accepted any weights; the CLI accepted transit models on the routing track; R2's restricted MILP ran up to 300 s past its budget | E-n30-k3 R2-ipm ran 1,823.7 s on an 1,800 s budget |
-| Stale or provenance-limited | Bundles from dirty trees, without scenario values or digests; run_bench aggregated stored U and L unchecked, treated a file's existence as completion, ignored child failures | Every legacy bundle has a decision in `docs/results/MIGRATION.json` |
-| Disclosed restriction, now qualified | Depot recovery is an external term, not a feasible process; the demand charge x 12/365 is a normalized weight, not a bill; 285.8 kWh is a derived stress case; 19 buses and 10 chargers are system-wide context | Wording of Data §3, Models §3a, the README and Results |
-| Unfinished, already disclosed | 15 routing cases, the four full-day sourced runs, the E-n30-k3 IPM master limit, the empty 250 kWh comparison, the stalled R3 grid rows | Unchanged; not new defects |
+1. its code is committed; the CLI refuses to write a bundle from a tree whose code differs from its commit;
+2. the record is self-consistent under the two-sided rule of [Algorithms](ALGORITHMS.md) §6;
+3. its formulation version is the current one (`R1/1`, `R2-RCC/1`, `R3/1`, `M0/2`, `M1/2`, `M2/2`);
+4. its input digests match the inputs on disk;
+5. the replay reproduces U.
 
-**3. Experiments**
+An upper bound needs no further provenance: a route set or schedule that the replay accepts certifies its own cost.
 
-| Experiment | Instances | Measures |
-| --- | --- | --- |
-| Certify the benchmark | 2019 E set | R1 status and gap per instance; R2 bound; comparison with the report and evrp-python |
-| Price of the battery, routing | 2019 E set | z(R1)-z(R0), absolute and relative |
-| Interior versus simplex duals | 2019 E set, ascending size | Outer iterations, pricing calls, time, final bound |
-| IPM nodes in branch-and-bound | Tiny R1 and M1 | Nodes, bound quality at inexact nodes, time against HiGHS |
-| Price of the battery, transit | One TransLink corridor | M1 against M0: buses, deadhead, cost |
-| Price of charging physics | Corridor; 2019 E set | M2 against M1; R3 against R1 over a parameter grid |
-| Route 100 on sourced parameters | Route 100, full day | M1 under BC Hydro RS 1640 and RS 1650 with two pack sizes: fleet, plugs, on-route energy, billed demand, electricity cost, against TransLink's 19 buses |
-| Scale | Corridor subsets of increasing size | Where each method stops returning a certificate |
+**4. Scale limits**
 
-**4. Scale limits measured so far**
+Stated qualitatively, as observed in the Python implementation (revision 89e967d); the measured values of the Rust build are in
+[Results](results/README.md).
 
-From the bundles in `docs/results` ([Results](results/README.md)). Figures below from a bundle
-the migration manifest does not retain (a dirty revision, or M1/M2 before 1 October 2026) are
-provenance-limited or stale: recorded, not shown false, and not admitted to a verdict.
-
-- R1 with HiGHS certified E-n23-k3 in 211 s and did not close E-n22-k4 in 600 s
-  (L = 341.25 against U = 384.68). R0 certified both; on E-n30-k3 it stopped at
-  600 s with a 26.8% gap.
-- R2 bounded E-n22-k4 at 380.50, well above R1's bound: 9.8 s with interior duals,
-  39.3 s with simplex duals (the first machine; its bundles record no host).
-- From 29 September 2026 the runs used a second machine (Intel Core i5-1335U, SciPy 1.17.1,
-  the same HiGHS 1.12.0), two cases at a time; each bundle names its host
-  ([Toolchain](TOOLCHAIN.md)). On E-n23-k3 both dual sources converged to the LP bound
-  561.7179, interior duals in 197.6 s and simplex duals in 416.5 s; R1's certified optimum
-  571.9474 lies 1.8% above it. On E-n30-k3 simplex duals converged to 484.5677 in 849.8 s,
-  while the textbook IPM master stopped at its iteration limit in 122 of 156 outer
-  iterations and the run ended at its 1,800 s limit with bound 417.97. Interior duals are
-  therefore not uniformly faster: they won on the two smallest instances and failed on the
-  third. Why the master stops there is not yet investigated.
-- E-n30-k3 is bracketed at [484.5677, 527.2049] (R2's bound, R1's incumbent at 600 s; gap
-  8.09%). The report's 511.2539 lies inside the bracket, so it is neither certified nor
-  refuted. R0 on E-n33-k4 stopped at 600 s with L = 662.12.
-- M1 certified Route 100 to 08:00 (54 trips) and reached a 0.85% gap to 10:00
-  (77 trips, 900 s). For the full day (219 trips) it stopped at 1,800 s with a 36.6%
-  gap: the bound stays near the battery-free cost.
-- The charging-physics grid (OA-04) was run twice. The first design compared M2 with M1 on
-  Route 100 before 06:30 with the declared 250 kWh battery, where no bus charges (least
-  energy 135.6 kWh against a 50 kWh reserve), so M2 = M1 at every alpha: true, and empty.
-  The grid now adds a declared 100 kWh battery, with which the window charges and loss costs
-  0.053, 0.107 and 0.208 CAD at the three alphas, each certified by OA. R3 on the eight far
-  customers of E-n22-k4 stalled at alpha = 0 after 1,203 s with an 18.5% gap: the loss row is
-  linear there, so the OA master MILP itself did not close within 600 s. On six customers R3
-  is certified at alpha 0, 2.5e-4 and 5e-4, with routes 3.17 (1.2%) longer than R1's at every
-  alpha. At alpha = 1e-3 it stalls with no incumbent, L = 293.81: the fixed-route barrier
-  subproblem reached its iteration limit on all three assignments. That alpha puts the
-  cost-optimal power sqrt(c_tau / (c_e alpha)) at exactly P = 100, so the optimum lies on
-  q <= P tau with a zero multiplier, where strict complementarity fails. On the certified
-  alpha = 5e-4 routes the same subproblem converges in 0.4 s at alpha = 0.99e-3 (293.791) and
-  1.01e-3 (293.838) and fails only at 1e-3. The grid point is kept as a measured limit of the
-  textbook barrier, not moved.
-- Route 100 on sourced parameters ([Data](DATA.md) §3) is not yet measured: the four
-  full-day runs (`python run_case.py transit route100 M1 --scenario rs1640-stress --time 1800`,
-  likewise `rs1650-stress`, and `rs1640`, `rs1650` at 600 s) were stopped
-  4.5 minutes in and wrote no bundle; they are to be run only under the readings of Data §3
-  (normalized demand weight, external depot term, derived stress pack). One probe, not a
-  bundle, run before the tariff terms existed and under M1/1, set the 594 kWh pack,
-  1.429 kWh/km, eta 0.90 and 5 plugs per loop in the illustrative scenario: in 300 s M1 found
-  a replayed full-day schedule on 16 buses with no on-route charging (U = 7,539.60,
-  L = 7,052.19), though 6 of M0's 16 battery-free duties fall below the reserve with that pack.
-  That is why the `-stress` files exist: a derived 285.8 kWh case that makes on-route charging
-  necessary, not a bracket on the installed pack.
-- Not yet measured: R1 and R2 on E-n33-k4; R0, R1 and R2 on E-n51-k5 to E-n101-k8
-  (15 cases; `python run_bench.py --run --missing`).
-
-**5. Acceptance criteria for the first release**
-
-1. Every check in §2 for R0-R3, M0-M2, the IPM, branch-and-bound, and OA passes,
-   or its failure is recorded with the revision.
-2. For each of the seven 2019 E instances, the report states one of: certified
-   optimal, bracketed with a stated gap, or open, with the evidence.
-3. The corridor study reports M0, M1, and M2 with bounds and replayed schedules.
-4. Every number in the README is regenerated by a committed command and carries
-   the revision that produced it.
+- R1 with HiGHS closes the smallest benchmark instances and leaves a gap on the larger E instances inside a time limit.
+- R2 with cuts and exact pricing certifies the smallest instances. On the larger ones the relaxation converges to a valid bound
+  that lies below the published values, and the restricted MILP over the generated columns gives an incumbent above it. The
+  remaining gap belongs to the relaxation and the incumbent, which only branching would close, not to pricing time.
+- M1 certifies Route 100 for a morning window. For the full day the bound stays near the battery-free cost within the time
+  limit, and a gap remains.
+- A fixed-route barrier subproblem of R3 fails to converge when the cost-optimal charging power lies exactly on the power limit
+  with a zero multiplier, where strict complementarity fails (observed in the Python implementation, revision 89e967d). Such a
+  grid point is kept as a measured limit of the barrier method, not moved.

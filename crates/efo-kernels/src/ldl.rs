@@ -85,7 +85,6 @@ pub struct Ldl {
     eps: f64,
     del: f64,
     k: Lower,
-    pub analyses: usize,
 }
 
 fn analyse(k: &Lower) -> SymbolicCholesky<usize> {
@@ -117,7 +116,6 @@ impl Ldl {
             eps,
             del,
             k: Lower::default(),
-            analyses: 1,
         };
         f.factor(k).then_some(f)
     }
@@ -132,7 +130,6 @@ impl Ldl {
             self.sym = analyse(&k);
             self.l = vec![0.0; self.sym.len_val()];
             self.pattern = (k.p.clone(), k.i.clone());
-            self.analyses += 1;
         }
         let a = SparseColMatRef::<usize, f64>::new(
             SymbolicSparseColMatRef::new_checked(k.n, k.n, &k.p, None, &k.i),
@@ -192,11 +189,6 @@ impl Ldl {
             }
         }
         d
-    }
-
-    /// Entries of the factor L.
-    pub fn nnz(&self) -> usize {
-        self.sym.len_val()
     }
 }
 

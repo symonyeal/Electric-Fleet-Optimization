@@ -26,8 +26,7 @@ kappa = {value = 1.42915, unit = "kWh/km", source = "CARB 2018 Table 2: Altoona 
 [charger]
 P = {value = 450.0, unit = "kW", source = "illustrative"}              # TransLink's rating not found
 eta = {value = 0.90, unit = "1", source = "CARB 2018 Appendix 1: Foothill Transit on-route charging, one year of utility bills"}
-alpha = {value = 6.7e-5, unit = "1/kW", source = "illustrative"}       # M2 only
-gamma = {value = 1.0e-4, unit = "CAD/(kW^2 h)", source = "illustrative"}  # M1-Q only
+alpha = {value = 6.7e-5, unit = "1/kW", source = "illustrative"}
 
 [sites.marpole]
 name = "Marpole Loop"
