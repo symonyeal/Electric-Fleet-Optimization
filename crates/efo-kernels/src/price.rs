@@ -1,4 +1,4 @@
-//! Least reduced-cost ng-routes by labeling on the station-path multigraph (Routing §5).
+//! Least reduced-cost ng-routes by labeling on the station-path multigraph (Routing §3).
 //!
 //! Legend
 //!   o ........ the depot;  I .. customers, at positions 0..n of the ng bitmasks (n <= 128)
@@ -69,7 +69,6 @@ pub struct Priced {
     pub best: f64,
     pub exact: bool,
     pub cols: Vec<Column>,
-    pub labels: usize,
 }
 
 /// (value, label, arc), ordered by value, then label and arc: the key of both heaps below.
@@ -307,12 +306,7 @@ impl Graph {
                 Column { rc, arcs }
             })
             .collect();
-        Priced {
-            best,
-            exact,
-            cols,
-            labels: lab.len(),
-        }
+        Priced { best, exact, cols }
     }
 }
 

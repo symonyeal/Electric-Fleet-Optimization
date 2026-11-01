@@ -1,9 +1,9 @@
 [workspace]
 resolver = "3"
-members = ["crates/*"]
+members = ["crates/efo", "crates/efo-kernels"]
 
 [workspace.package]
-version = "0.2.0"
+version = "0.3.0"
 edition = "2024"
 rust-version = "1.88"
 publish = false
@@ -12,8 +12,6 @@ repository = "https://github.com/symonyeal/Electric-Fleet-Optimization"
 [workspace.dependencies]
 efo-kernels = { path = "crates/efo-kernels" }
 faer = { version = "0.24.4", default-features = false, features = ["std", "sparse-linalg"] }
-pyo3 = "0.30.1"
-numpy = "0.30.0"
 
 [workspace.lints.clippy]
 # The code transcribes the documents' notation: single-letter and short symbols are deliberate.

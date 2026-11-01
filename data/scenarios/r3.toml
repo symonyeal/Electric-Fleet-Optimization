@@ -1,4 +1,4 @@
-# R3 scenario (Routing §6). The CEC benchmark has no time or price data and abstract units:
+# R3 scenario (Routing §5). The CEC benchmark has no time or price data and abstract units:
 # "u" is its distance unit and "e" its energy unit (e = h * u). Everything here is illustrative.
 
 [time]

@@ -1,0 +1,19 @@
+[package]
+name = "efo"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+repository.workspace = true
+description = "Electric vehicle routing and bus charging schedules with replayed bounds"
+
+[dependencies]
+efo-kernels.workspace = true
+highs = "2.4"
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["float_roundtrip"] }
+sha2 = "0.10"
+toml = "0.9"
+
+[lints]
+workspace = true
