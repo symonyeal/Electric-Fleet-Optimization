@@ -100,6 +100,13 @@ fn main_() -> Result<(), String> {
             if code.dirty && out_is_results(&dir) {
                 return Err("refusing to write a result from uncommitted code into docs/results: commit first, or pass --out".into());
             }
+            let f = dir.join(format!("{}.json", c.stem()));
+            if f.try_exists().map_err(|e| e.to_string())? {
+                return Err(format!(
+                    "{} already exists; use a fresh --out DIR",
+                    f.display()
+                ));
+            }
             let (record, inputs) = run::run(root, &c)?;
             println!(
                 "{} {}: status={} U={:?} L={:?} gap={:?} {:.1} s",
@@ -119,12 +126,7 @@ fn main_() -> Result<(), String> {
                 inputs,
                 command: args[1..].to_vec(),
             };
-            let f = dir.join(format!("{}.json", c.stem()));
-            std::fs::write(
-                &f,
-                serde_json::to_string_pretty(&b).map_err(|e| e.to_string())? + "\n",
-            )
-            .map_err(|e| format!("{}: {e}", f.display()))?;
+            bundle::write_new(&f, &b)?;
             Ok(())
         }
         _ => Err(USAGE.into()),

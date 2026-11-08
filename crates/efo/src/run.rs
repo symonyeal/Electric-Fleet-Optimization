@@ -184,11 +184,21 @@ pub fn replayed(root: &Path, b: &Bundle) -> Result<(Option<f64>, Files), String>
                     let sc = sc.as_ref().unwrap();
                     let ch: BTreeMap<String, (f64, f64)> =
                         serde_json::from_value(get("charges")).map_err(json)?;
-                    let ch = ch.into_iter().map(|(k, v)| {
-                        let (a, z) = k.split_once(':').unwrap_or(("0", "0"));
-                        ((a.parse().unwrap_or(0), z.parse().unwrap_or(0)), v)
-                    });
-                    let rp = replay::replay_charge(&p, sc, &r, &ch.collect());
+                    let ch: BTreeMap<(usize, usize), _> = ch
+                        .into_iter()
+                        .map(|(k, v)| {
+                            let key = k.split_once(':').and_then(|(a, z)| {
+                                Some((a.parse::<usize>().ok()?, z.parse::<usize>().ok()?))
+                            });
+                            match key {
+                                Some((a, z)) if k == format!("{a}:{z}") => Ok(((a, z), v)),
+                                _ => Err(format!(
+                                    "invalid charge key {k:?}: expected route:position"
+                                )),
+                            }
+                        })
+                        .collect::<Result<_, _>>()?;
+                    let rp = replay::replay_charge(&p, sc, &r, &ch);
                     rp.ok.then_some(rp.cost)
                 }
                 (Some(r), _) => Some(replay::replay(&p, &r, true))
@@ -219,4 +229,83 @@ pub fn replayed(root: &Path, b: &Bundle) -> Result<(Option<f64>, Files), String>
         }
     };
     Ok((u, files))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn stored_charge_decisions_are_checked_before_admission() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let b: Bundle = serde_json::from_str(include_str!(
+            "../../../docs/results/evrp/E-n22-k4-far6-alpha0e0-R3.json"
+        ))
+        .unwrap();
+        assert!(replayed(&root, &b).unwrap().0.is_some());
+        for key in [
+            "0:01",
+            "+0:1",
+            "bad:1",
+            "0:1:2",
+            "0",
+            "184467440737095516160:1",
+        ] {
+            let mut changed = b.clone();
+            let charges = changed.record.detail["charges"].as_object_mut().unwrap();
+            let value = charges.remove("0:1").unwrap();
+            charges.insert(key.into(), value);
+            assert!(replayed(&root, &changed).is_err(), "accepted key {key}");
+        }
+        for (key, value) in [
+            ("0:1", serde_json::json!([-1.0, 1.0])),
+            ("99:1", serde_json::json!([1.0, 1.0])),
+        ] {
+            let mut changed = b.clone();
+            changed.record.detail["charges"][key] = value;
+            assert!(replayed(&root, &changed).unwrap().0.is_none());
+        }
+
+        let dir = std::env::var_os("EFO_TEST_ROOT").map_or_else(
+            || {
+                std::env::current_exe()
+                    .unwrap()
+                    .parent()
+                    .unwrap()
+                    .to_owned()
+            },
+            std::path::PathBuf::from,
+        );
+        let stamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let dir = dir.join(format!("efo-admission-{stamp}"));
+        for path in b
+            .inputs
+            .keys()
+            .map(String::as_str)
+            .chain(["data/evrp.sha256"])
+        {
+            let dest = dir.join(path);
+            fs::create_dir_all(dest.parent().unwrap()).unwrap();
+            fs::copy(root.join(path), dest).unwrap();
+        }
+        let results = dir.join("docs/results/evrp");
+        fs::create_dir_all(&results).unwrap();
+        crate::bundle::write_new(&results.join("valid.json"), &b).unwrap();
+        let mut bad = b.clone();
+        bad.record.detail["charges"]["0:1"] = serde_json::json!([-1.0, 1.0]);
+        crate::bundle::write_new(&results.join("negative.json"), &bad).unwrap();
+        let c = crate::report::collect(&dir);
+        assert_eq!(c.admitted.len(), 1);
+        assert_eq!(c.admitted[0].0.file_name().unwrap(), "valid.json");
+        assert_eq!(c.refused.len(), 1);
+        assert!(
+            c.refused[0]
+                .1
+                .iter()
+                .any(|s| s.contains("replay gives U = None"))
+        );
+    }
 }

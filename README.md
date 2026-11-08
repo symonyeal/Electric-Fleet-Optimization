@@ -81,5 +81,11 @@ cargo run --release -p efo -- report                           # tables and the 
 Each run writes a bundle to `docs/results/`: the result record (status, U, L, gap, decisions),
 the case, the commit, the host, and the SHA-256 of every input. The report admits a bundle only
 if its code was committed, its inputs are unchanged and the independent replay reproduces its U.
+Bundle files are write-once: a complete, synced staging file is published without replacing an
+existing path. Use a fresh `--out DIR` for another run of the same case. Publication requires a
+filesystem with hard-link support. R3 replay rejects negative or non-finite charge decisions,
+malformed charge keys, and keys that do not identify a station visit.
+The two generated report pages are written sequentially; run `efo report` with one writer and
+publish them together in one commit.
 GitHub Actions runs the Rust checks on Linux and Windows and regenerates the report on every
 push.

@@ -15,6 +15,8 @@
 use crate::cert::Record;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+use std::fs::{self, OpenOptions};
+use std::io::Write;
 use std::path::Path;
 use std::process::Command;
 
@@ -71,6 +73,50 @@ pub struct Bundle {
     pub host: BTreeMap<String, String>,
     pub inputs: BTreeMap<String, String>,
     pub command: Vec<String>,
+}
+
+/// Publish a complete bundle once; an existing result path is never replaced.
+pub fn write_new(path: &Path, bundle: &Bundle) -> Result<(), String> {
+    let mut bytes = serde_json::to_vec_pretty(bundle).map_err(|e| e.to_string())?;
+    bytes.push(b'\n');
+    let name = path
+        .file_name()
+        .ok_or_else(|| format!("{}: no file name", path.display()))?;
+    let dir = path.parent().unwrap_or_else(|| Path::new("."));
+    let mut staged = None;
+    let mut file = None;
+    for n in 0..128 {
+        let temp = dir.join(format!(
+            ".{}.{}.{}.tmp",
+            name.to_string_lossy(),
+            std::process::id(),
+            n
+        ));
+        match OpenOptions::new().write(true).create_new(true).open(&temp) {
+            Ok(f) => {
+                staged = Some(temp);
+                file = Some(f);
+                break;
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(e) => return Err(format!("{}: {e}", temp.display())),
+        }
+    }
+    let temp =
+        staged.ok_or_else(|| format!("{}: could not reserve a staging path", path.display()))?;
+    let result = match file {
+        Some(mut file) => file
+            .write_all(&bytes)
+            .and_then(|_| file.sync_all())
+            .map_err(|e| format!("{}: {e}", temp.display()))
+            .and_then(|_| {
+                drop(file);
+                fs::hard_link(&temp, path).map_err(|e| format!("{}: {e}", path.display()))
+            }),
+        None => Err(format!("{}: staging file was not opened", temp.display())),
+    };
+    let _ = fs::remove_file(&temp);
+    result
 }
 
 fn git(root: &Path, args: &[&str]) -> String {
@@ -131,4 +177,91 @@ pub fn host() -> BTreeMap<String, String> {
         ("threads".to_owned(), threads.to_string()),
         ("os".to_owned(), std::env::consts::OS.to_owned()),
     ])
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::cert::Record;
+
+    #[test]
+    fn result_bundle_is_published_once_without_replacing_existing_bytes() {
+        let dir = std::env::var_os("EFO_TEST_ROOT").map_or_else(
+            || {
+                std::env::current_exe()
+                    .unwrap()
+                    .parent()
+                    .unwrap()
+                    .to_owned()
+            },
+            std::path::PathBuf::from,
+        );
+        let stamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let path = dir.join(format!("efo-bundle-write-once-{stamp}.json"));
+        let bundle = Bundle {
+            record: Record {
+                model: "R1".into(),
+                instance: "test".into(),
+                status: "open".into(),
+                solver_status: "optimal".into(),
+                validation_status: "not_available".into(),
+                certificate_status: "open".into(),
+                u: None,
+                l: None,
+                gap_rel: None,
+                certified: false,
+                defect: None,
+                bound_source: None,
+                objective: None,
+                message: String::new(),
+                elapsed: 0.0,
+                detail: serde_json::json!({}),
+            },
+            case: Case {
+                track: "evrp".into(),
+                instance: "test".into(),
+                model: "R1".into(),
+                time: 1.0,
+                far: None,
+                until: None,
+                scenario: None,
+                battery: None,
+                alpha: None,
+            },
+            code: Code {
+                commit: "test".into(),
+                dirty: false,
+            },
+            host: BTreeMap::new(),
+            inputs: BTreeMap::new(),
+            command: vec![],
+        };
+
+        write_new(&path, &bundle).unwrap();
+        let original = fs::read(&path).unwrap();
+        assert!(write_new(&path, &bundle).is_err());
+        assert_eq!(fs::read(&path).unwrap(), original);
+        fs::remove_file(path).unwrap();
+
+        let path = dir.join(format!("efo-bundle-race-{stamp}.json"));
+        let gate = std::sync::Barrier::new(2);
+        let wins = std::thread::scope(|s| {
+            let a = s.spawn(|| {
+                gate.wait();
+                write_new(&path, &bundle)
+            });
+            let b = s.spawn(|| {
+                gate.wait();
+                write_new(&path, &bundle)
+            });
+            usize::from(a.join().unwrap().is_ok()) + usize::from(b.join().unwrap().is_ok())
+        });
+        assert_eq!(wins, 1);
+        let stored: Bundle = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        assert_eq!(stored.case, bundle.case);
+        fs::remove_file(path).unwrap();
+    }
 }

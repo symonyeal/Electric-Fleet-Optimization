@@ -24,6 +24,8 @@ Tolerances are stated with each check. Unless stated otherwise: objective agreem
 | Result contract (`cert.rs`) | Two-sided gap rule: U = 100, L = 100.5 is `invalid_bound`, never certified, with a defect; a 1e-5 crossing within tolerance is certified and reported raw; the stored public fields are what the rule derives |
 | Scenarios | Every committed scenario loads; an out-of-domain efficiency, a reserve above s0, a bare number, half a billing window and a stop owned by two sites are each refused; the billing window wraps past midnight |
 | EVRP reader, route replay | The tiny fixture reads as written; each defect kind is named on hand-made routes; the enumerated optimum replays at its length |
+| Stored R3 decisions | Negative and non-finite energy/dwell, malformed keys and keys outside station visits are refused; zero and positive charges still replay; report collection admits the original pinned bundle and refuses its negative-charge mutation |
+| Bundle publication | Repeated publication preserves the original bytes; two concurrent writers to one unused path have exactly one winner and leave a complete readable bundle |
 | Kernel | A textbook LP by the normal equations; a convex row against its closed-form optimum; the quasi-definite LDL' solve; duplicate entries summed and mirrored |
 | Barrier wrapper | A row side tight on the box becomes an equality, not a slack in [0, 0] (that slack made every M2 subproblem on Route 100 numerical) |
 | Station paths | Path counts equal those of the previous implementation on 5 fixtures |

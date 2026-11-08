@@ -7,12 +7,12 @@
 use super::Instance;
 use crate::scenario::Recharge;
 use serde::Serialize;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::Path;
 
 /// ok, defects (kind, detail), length, and per depot-to-depot route its load and least charge.
-/// Kinds: unknown_node, endpoint, missing, repeat, overload, battery.
+/// Kinds: unknown_node, endpoint, empty, missing, repeat, overload, battery.
 #[derive(Clone, Debug, Serialize)]
 pub struct Replay {
     pub ok: bool,
@@ -32,6 +32,10 @@ pub fn replay(p: &Instance, routes: &[Vec<usize>], battery: bool) -> Replay {
     let mut length = 0.0;
     let mut bad = |k: &str, s: String| defects.push((k.to_owned(), s));
     for r in routes {
+        if r.is_empty() {
+            bad("empty", "route has no nodes".into());
+            continue;
+        }
         if r.iter().any(|&k| k == 0 || k > n) {
             bad("unknown_node", format!("{r:?}"));
             continue;
@@ -95,7 +99,7 @@ pub fn replay(p: &Instance, routes: &[Vec<usize>], battery: bool) -> Replay {
 
 /// cost = c_d length + c_e sum (q/eta + alpha q^2/tau) + c_tau sum tau, of R3 routes with partial
 /// charges (Routing §5); ok and defects as replay's, with kinds energy, overcharge, power,
-/// dwell and time in place of battery.
+/// dwell, time, and charge (invalid decision domain or station position) in place of battery.
 #[derive(Clone, Debug, Serialize)]
 pub struct ChargeReplay {
     pub ok: bool,
@@ -106,7 +110,8 @@ pub struct ChargeReplay {
     pub dwell: f64,
 }
 
-/// INPUT charges: (route, position of the station in it) -> (q, tau), energy and hours.
+/// INPUT charges: (route index, zero-based station position) -> (q, tau), energy and hours.
+/// Every key must name a station in these routes; each q and tau must be finite and nonnegative.
 pub fn replay_charge(
     p: &Instance,
     sc: &Recharge,
@@ -116,7 +121,7 @@ pub fn replay_charge(
     let base = replay(p, routes, false);
     let mut defects = base.defects.clone();
     let tol = 1e-6;
-    let (mut grid, mut dwell) = (0.0, 0.0);
+    let (mut grid, mut dwell, mut stations) = (0.0, 0.0, BTreeSet::new());
     for (r, route) in routes.iter().enumerate() {
         if route.iter().any(|&k| k == 0 || k > p.x.len()) {
             continue;
@@ -134,7 +139,16 @@ pub fn replay_charge(
                 ));
             }
             if p.f.contains(&c) {
-                let (q, tau) = charges.get(&(r, pos + 1)).copied().unwrap_or((0.0, 0.0));
+                let key = (r, pos + 1);
+                stations.insert(key);
+                let (q, tau) = charges.get(&key).copied().unwrap_or((0.0, 0.0));
+                if !(q.is_finite() && q >= 0.0 && tau.is_finite() && tau >= 0.0) {
+                    defects.push((
+                        "charge".into(),
+                        format!("route {r} station {}: q={q}, tau={tau}; expected finite nonnegative values", c + 1),
+                    ));
+                    continue;
+                }
                 if e + q > p.q + tol {
                     defects.push((
                         "overcharge".into(),
@@ -170,6 +184,14 @@ pub fn replay_charge(
             defects.push((
                 "time".into(),
                 format!("route {r} returns at {clock:.6} h > {}", sc.time.t),
+            ));
+        }
+    }
+    for &(r, pos) in charges.keys() {
+        if !stations.contains(&(r, pos)) {
+            defects.push((
+                "charge".into(),
+                format!("route {r} position {pos} is not a station visit"),
             ));
         }
     }
@@ -215,6 +237,41 @@ pub fn routes_text(routes: &[Vec<usize>]) -> String {
 mod tests {
     use super::*;
 
+    fn charge_fixture() -> (Instance, Recharge, Vec<Vec<usize>>) {
+        let p = Instance {
+            name: "charge-replay".into(),
+            x: vec![[0.0, 0.0], [1.0, 0.0], [2.0, 0.0]],
+            d: vec![],
+            o: 0,
+            i: vec![1],
+            f: vec![2],
+            b: vec![0.0, 1.0, 0.0],
+            cap: 10.0,
+            q: 100.0,
+            h: 1.0,
+            published: None,
+        };
+        let sc = Recharge {
+            time: crate::scenario::RechargeTime {
+                speed: 1.0,
+                service: 0.0,
+                t: 100.0,
+                tau_min: 1.0,
+            },
+            charger: crate::scenario::Charger {
+                p: 10.0,
+                eta: 1.0,
+                alpha: 0.0,
+            },
+            cost: crate::scenario::RechargeCost {
+                distance: 0.0,
+                energy: 1.0,
+                dwell: 0.0,
+            },
+        };
+        (p, sc, vec![vec![1, 2, 3, 1]])
+    }
+
     #[test]
     fn defects_are_named() {
         let p = crate::evrp::fixture("tiny.evrp");
@@ -239,5 +296,80 @@ mod tests {
             kinds(&[vec![2, 1], vec![9]]),
             ["endpoint", "unknown_node", "missing", "missing"]
         );
+    }
+
+    #[test]
+    fn charge_replay_rejects_negative_charge() {
+        let (p, sc, routes) = charge_fixture();
+        let charges = BTreeMap::from([((0, 2), (-1.0, 1.0))]);
+        let r = replay_charge(&p, &sc, &routes, &charges);
+        assert!(!r.ok);
+        assert!(r.defects.iter().any(|(kind, _)| kind == "charge"));
+        assert_eq!(r.grid, 0.0);
+        assert_eq!(r.cost, 0.0);
+    }
+
+    #[test]
+    fn charge_replay_rejects_nonfinite_or_negative_decisions() {
+        let (p, sc, routes) = charge_fixture();
+        for (q, tau) in [
+            (f64::NAN, 1.0),
+            (f64::INFINITY, 1.0),
+            (f64::NEG_INFINITY, 1.0),
+            (-1.0, 1.0),
+            (1.0, f64::NAN),
+            (1.0, f64::INFINITY),
+            (1.0, f64::NEG_INFINITY),
+            (1.0, -1.0),
+        ] {
+            let charges = BTreeMap::from([((0, 2), (q, tau))]);
+            let r = replay_charge(&p, &sc, &routes, &charges);
+            assert!(!r.ok, "accepted q={q}, tau={tau}");
+            assert!(r.defects.iter().any(|(kind, _)| kind == "charge"));
+            assert!(r.cost.is_finite());
+        }
+    }
+
+    #[test]
+    fn charge_replay_rejects_keys_outside_station_positions() {
+        let (p, sc, routes) = charge_fixture();
+        let charges = BTreeMap::from([
+            ((0, 1), (1.0, 1.0)),
+            ((0, 9), (1.0, 1.0)),
+            ((1, 2), (1.0, 1.0)),
+        ]);
+        let r = replay_charge(&p, &sc, &routes, &charges);
+        assert!(!r.ok);
+        assert_eq!(
+            r.defects
+                .iter()
+                .filter(|(kind, _)| kind == "charge")
+                .count(),
+            3
+        );
+    }
+
+    #[test]
+    fn empty_route_is_a_replay_defect() {
+        let (p, sc, _) = charge_fixture();
+        let routes = vec![vec![]];
+        let r = replay(&p, &routes, true);
+        assert!(!r.ok);
+        assert!(r.defects.iter().any(|(kind, _)| kind == "empty"));
+        let r = replay_charge(&p, &sc, &routes, &BTreeMap::new());
+        assert!(!r.ok);
+        assert!(r.defects.iter().any(|(kind, _)| kind == "empty"));
+    }
+
+    #[test]
+    fn valid_nonnegative_charge_still_replays() {
+        let (p, sc, routes) = charge_fixture();
+        for q in [0.0, 1.0] {
+            let charges = BTreeMap::from([((0, 2), (q, 1.0))]);
+            let r = replay_charge(&p, &sc, &routes, &charges);
+            assert!(r.ok, "{:?}", r.defects);
+            assert_eq!(r.grid, q);
+            assert_eq!(r.cost, q);
+        }
     }
 }
