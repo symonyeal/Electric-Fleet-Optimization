@@ -25,11 +25,15 @@ pub struct Replay {
     pub deadhead_km: f64,
 }
 
-/// Kinds: unknown_trip, missing, repeat, time.
+/// Kinds: empty, unknown_trip, missing, repeat, time.
 pub fn replay(c: &Corridor, duties: &[Vec<String>], v: &Transit) -> Replay {
     let trips: HashMap<&str, &super::Trip> = c.trips.iter().map(|t| (t.id.as_str(), t)).collect();
     let (mut defects, mut seen, mut dh) = (Vec::new(), HashMap::<&str, usize>::new(), 0.0);
     for d in duties {
+        if d.is_empty() {
+            defects.push(("empty".to_owned(), "duty has no trips".to_owned()));
+            continue;
+        }
         if let Some(bad) = d.iter().find(|k| !trips.contains_key(k.as_str())) {
             defects.push(("unknown_trip".to_owned(), bad.clone()));
             continue;
@@ -109,7 +113,7 @@ pub fn replay_energy(
     let (mut use_, mut km_dh, mut kwh, mut restore) =
         (BTreeMap::<(String, i64), (f64, f64)>::new(), 0.0, 0.0, 0.0);
     for d in duties {
-        if d.iter().any(|k| !trips.contains_key(k.as_str())) {
+        if d.is_empty() || d.iter().any(|k| !trips.contains_key(k.as_str())) {
             continue;
         }
         let km = great_circle_km(v.depot.at(), c.stops[&trips[d[0].as_str()].first].at()) * det;

@@ -110,7 +110,7 @@ pub fn compile<'a>(c: &'a Corridor, v: &'a Transit) -> Instance<'a> {
         for (j, b) in t.iter().enumerate() {
             let k = km(stop(&a.last), stop(&b.first));
             let tau = 3600.0 * k / v.deadhead.speed;
-            if a.arr + tau + v.time.layover <= b.dep + 1e-9 {
+            if i != j && a.arr + tau + v.time.layover <= b.dep + 1e-9 {
                 arcs.push((i, j, tau));
                 akm.push(k);
             }

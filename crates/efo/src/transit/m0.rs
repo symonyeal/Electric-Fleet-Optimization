@@ -109,6 +109,13 @@ mod tests {
     use crate::transit::fixtures::route100;
 
     #[test]
+    fn an_empty_duty_is_a_defect_not_a_panic() {
+        let (c, v) = route100();
+        let r = crate::transit::replay::replay(&c, &[Vec::new()], &v);
+        assert!(!r.ok && r.defects.iter().any(|d| d.0 == "empty"));
+    }
+
+    #[test]
     fn route100_needs_16_buses() {
         // Revision 89e967d: matching LP, min-cost flow and Hopcroft-Karp all gave 16; 21041
         // pairs; 23 blocks, none violating the deadhead model.

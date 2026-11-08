@@ -220,19 +220,6 @@ pub fn read_routes(path: &Path) -> Result<Vec<Vec<usize>>, String> {
         .collect()
 }
 
-pub fn routes_text(routes: &[Vec<usize>]) -> String {
-    routes
-        .iter()
-        .map(|r| {
-            r.iter()
-                .map(|k| k.to_string())
-                .collect::<Vec<_>>()
-                .join(" ")
-                + "\n"
-        })
-        .collect()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
