@@ -250,6 +250,22 @@ impl Domains {
     }
 }
 
+/// Command-line overrides obey the domains of the scenario files: alpha >= 0, battery B > 0.
+pub fn overrides(alpha: Option<f64>, battery: Option<f64>) -> Result<(), String> {
+    let mut d = Domains(Vec::new());
+    if let Some(a) = alpha {
+        d.nonneg("--alpha", a);
+    }
+    if let Some(b) = battery {
+        d.positive("--battery", b);
+    }
+    if d.0.is_empty() {
+        Ok(())
+    } else {
+        Err(format!("invalid override: {}", d.0.join("; ")))
+    }
+}
+
 pub fn recharge(path: &Path) -> Result<Recharge, String> {
     let s: Recharge = parse(path)?;
     let mut d = Domains(Vec::new());
@@ -395,6 +411,15 @@ mod tests {
             let e = transit(&f).unwrap_err();
             assert!(e.contains(why), "{e}");
         }
+        for (a, b) in [
+            (Some(-1.0), None),
+            (Some(f64::NAN), None),
+            (None, Some(0.0)),
+            (None, Some(f64::NAN)),
+        ] {
+            assert!(overrides(a, b).is_err(), "{a:?} {b:?}");
+        }
+        assert!(overrides(Some(0.0), Some(100.0)).is_ok());
         assert!(
             billed(23.5 * 3600.0, 22.0 * 3600.0, 6.0 * 3600.0)
                 && !billed(12.0 * 3600.0, 22.0 * 3600.0, 6.0 * 3600.0)
