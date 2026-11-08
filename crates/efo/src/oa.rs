@@ -90,13 +90,14 @@ pub fn oa(
             break;
         }
         let s = m.solve(master_time.min(left), crate::cert::EPS / 10.0);
+        // HiGHS's dual bound is valid without an incumbent (a timed-out master).
+        l = l.max(s.bound.unwrap_or(f64::NEG_INFINITY));
         let Some(x) = s.x else {
             if s.status == "infeasible" && u.is_none() {
                 status = "infeasible";
             }
             break;
         };
-        l = l.max(s.bound.unwrap_or(f64::NEG_INFINITY));
         let at =
             |gk: &dyn Cut, x: &[f64]| gk.f(&gk.idx().iter().map(|&j| x[j]).collect::<Vec<_>>());
         let violation = g.iter().map(|gk| at(gk.as_ref(), &x)).fold(0.0, f64::max);
@@ -218,5 +219,32 @@ mod tests {
             60.0,
         );
         assert_eq!(r.status, "numerical");
+    }
+
+    #[test]
+    fn a_master_without_incumbent_still_gives_its_bound() {
+        // Two knapsack equalities over 60 binaries, feasible by a planted subset, that a 0.2 s
+        // master cannot settle.
+        let mut p = Lp::default();
+        let x = p.vars(60, 1.0, 0.0, 1.0, true);
+        let mut a = 12345u64;
+        for _ in 0..2 {
+            let w: Vec<f64> = (0..60)
+                .map(|_| {
+                    a = a
+                        .wrapping_mul(6364136223846793005)
+                        .wrapping_add(1442695040888963407);
+                    (1_000_000 + (a >> 44)) as f64
+                })
+                .collect();
+            let t = w.iter().step_by(2).sum();
+            p.eq(
+                w.into_iter().enumerate().map(|(k, c)| (x + k, c)).collect(),
+                t,
+            );
+        }
+        let r = oa(&p, &[], &[], |_| ("optimal", None), |_| None, 5, 5.0, 0.2);
+        assert_eq!(r.status, "no_incumbent");
+        assert!(r.l.is_some());
     }
 }

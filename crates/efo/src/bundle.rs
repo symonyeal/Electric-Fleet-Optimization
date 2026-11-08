@@ -119,18 +119,26 @@ pub fn write_new(path: &Path, bundle: &Bundle) -> Result<(), String> {
     result
 }
 
-fn git(root: &Path, args: &[&str]) -> String {
-    Command::new("git")
+fn git(root: &Path, args: &[&str]) -> Result<String, String> {
+    let o = Command::new("git")
         .arg("-C")
         .arg(root)
         .args(args)
         .output()
-        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_owned())
-        .unwrap_or_default()
+        .map_err(|e| format!("git {}: {e}", args[0]))?;
+    if !o.status.success() {
+        return Err(format!(
+            "git {} failed: {}",
+            args[0],
+            String::from_utf8_lossy(&o.stderr).trim()
+        ));
+    }
+    Ok(String::from_utf8_lossy(&o.stdout).trim().to_owned())
 }
 
-/// The commit of the tree at root and whether its code differs from it.
-pub fn code(root: &Path) -> Code {
+/// The commit of the tree at root and whether its code differs from it; an error when git
+/// cannot say, so that no run starts that could not be admitted.
+pub fn code(root: &Path) -> Result<Code, String> {
     let changed = git(
         root,
         &[
@@ -141,11 +149,11 @@ pub fn code(root: &Path) -> Code {
             ":!docs/results",
             ":!*.md",
         ],
-    );
-    Code {
-        commit: git(root, &["rev-parse", "HEAD"]),
+    )?;
+    Ok(Code {
+        commit: git(root, &["rev-parse", "HEAD"])?,
         dirty: !changed.is_empty(),
-    }
+    })
 }
 
 pub fn host() -> BTreeMap<String, String> {
@@ -183,6 +191,12 @@ pub fn host() -> BTreeMap<String, String> {
 mod tests {
     use super::*;
     use crate::cert::Record;
+
+    #[test]
+    fn code_is_an_error_where_git_cannot_answer() {
+        let missing = std::env::temp_dir().join("efo-no-such-directory");
+        assert!(code(&missing).is_err());
+    }
 
     #[test]
     fn result_bundle_is_published_once_without_replacing_existing_bytes() {

@@ -44,6 +44,14 @@ struct Col {
     nodes: Vec<usize>,
 }
 
+/// ng-sets and labels are u128 bitmasks over the customers: at most 128 of them.
+pub fn fits(n: usize) -> Result<(), String> {
+    if n > 128 {
+        return Err(format!("R2 handles at most 128 customers, not {n}"));
+    }
+    Ok(())
+}
+
 /// N_i: customer i and its nu - 1 nearest customers, as bitmasks over positions in I.
 fn ng(p: &Instance, nu: usize) -> Vec<u128> {
     let mut out = vec![0u128; p.x.len()];
@@ -433,6 +441,12 @@ mod tests {
                 r.best
             );
         }
+    }
+
+    #[test]
+    fn more_than_128_customers_is_an_error() {
+        assert!(fits(128).is_ok());
+        assert!(fits(129).is_err());
     }
 
     #[test]

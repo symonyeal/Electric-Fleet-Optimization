@@ -97,7 +97,7 @@ fn main_() -> Result<(), String> {
         }
         Some("evrp" | "transit") => {
             let (c, out, replace) = case(&args[1..])?;
-            let code = bundle::code(root);
+            let code = bundle::code(root)?;
             let dir = out.unwrap_or_else(|| root.join("docs/results").join(&c.track));
             std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
             if code.dirty && out_is_results(&dir) {

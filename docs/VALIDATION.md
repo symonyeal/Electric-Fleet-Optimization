@@ -59,6 +59,27 @@ An upper bound needs no further provenance: a route set or schedule that the rep
 Stated qualitatively, as observed in the Python implementation (revision 89e967d); the measured values of the Rust build are in
 [Results](results/README.md).
 
+Measured scaling of the Rust build, read from the committed bundles (one run each, 1800 s limit, one thread, AMD Ryzen 7 PRO
+6850U, revision 8f07c5c recorded in every bundle; `efo` reports `elapsed` and `host` in the bundle). `n` is the customer count.
+
+| Model | Instance | n | Status | Time (s) | Gap |
+|---|---|---:|---|---:|---:|
+| R2 | E-n22-k4 | 21 | optimal | 1.3 | 0 |
+| R2 | E-n23-k3 | 22 | optimal | 21.2 | 0 |
+| R2 | E-n30-k3 | 29 | optimal | 14.7 | 0 |
+| R2 | E-n33-k4 | 32 | optimal | 67.7 | 0 |
+| R2 | E-n51-k5 | 50 | feasible_limit | 13.9 | 24.6% |
+| R2 | E-n76-k7 | 75 | feasible_limit | 43.4 | 28.3% |
+| R2 | E-n101-k8 | 100 | feasible_limit | 283.7 | 33.0% |
+| R3 (alpha 0) | E-n22-k4, 6 farthest customers | 6 | optimal | 84.3 | 0 |
+| R3 (alpha 0) | E-n22-k4, 8 farthest customers | 8 | stall | 1200.5 | 20.3% |
+
+Time does not grow smoothly with n: R2 stops when its relaxation converges and the restricted MILP over the generated columns
+ends, so the larger instances finish early with a gap that only branching would close. Pricing is O(R n^2) per call for R
+labels (`completion`, `price.rs`), and R3 adds one outer-approximation iteration per violated cut, so eight customers already
+exhaust the time limit. Instances 10 times larger than E-n101-k8 (1000 customers) and R3 beyond eight customers are not measured
+and are not claimed. R2 refuses more than 128 customers (the ng-sets are `u128` masks).
+
 - R1 with HiGHS closes the smallest benchmark instances and leaves a gap on the larger E instances inside a time limit.
 - R2 with cuts and exact pricing certifies the smallest instances. On the larger ones the relaxation converges to a valid bound
   that lies below the published values, and the restricted MILP over the generated columns gives an incumbent above it. The

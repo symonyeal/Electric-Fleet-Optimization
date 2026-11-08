@@ -128,6 +128,7 @@ pub fn run(root: &Path, case: &Case) -> Result<(Record, Files), String> {
         ("evrp", "R1") => r1(&instance(root, case, &mut files)?, case.time, 1e-7),
         ("evrp", "R2") => {
             let p = instance(root, case, &mut files)?;
+            evrp::r2::fits(p.i.len())?;
             let init = if case.far.is_none() {
                 seeds(root, &p, &mut files)?
             } else {
