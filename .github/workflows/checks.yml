@@ -35,7 +35,6 @@ jobs:
               f.write(f"LIBCLANG_PATH={Path(clang.__file__).parent / 'native'}\n")
       - run: cargo fmt --all -- --check
       - run: cargo clippy --workspace --all-targets --locked -- -D warnings
-      - run: cargo test --workspace --locked --release
       # The benchmark is fetched from evrp-python at commit 16d3499 and checked against
       # data/evrp.sha256; the report then replays every admitted bundle and must be unchanged.
       - name: Fetch the pinned benchmark
@@ -47,5 +46,6 @@ jobs:
             mkdir -p "data/fetched/$(dirname "$key")"
             curl -fsSL "$url/$key" -o "data/fetched/$key"
           done < data/evrp.sha256
+      - run: cargo test --workspace --locked --release
       - run: cargo run --release --locked -p efo -- report
       - run: git diff --exit-code -- README.md docs/results/README.md
