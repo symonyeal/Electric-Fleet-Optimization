@@ -1,11 +1,57 @@
 # Electric Fleet Optimization
 
-Optimization models for electric delivery routing and bus scheduling with charging
-constraints, each solved with a certified bound or an explicit gap. The routing track bounds
-seven instances of the IEEE WCCI-2020 EVRP benchmark; the transit track schedules and charges
-TransLink Route 100's 219 daily trips.
+## Problem
+
+- Electric delivery routing: seven instances of the IEEE WCCI-2020 EVRP benchmark.
+- Bus scheduling with charging: the 219 daily trips of TransLink Route 100, published as GTFS. From the trips and declared battery, charger and grid parameters, compute the buses and chargers needed and their cost.
+- Each model is solved with a certified bound or an explicit gap.
+- The IEEE WCCI-2020 competition report lists its EVRP values as upper bounds that "could be optimal in some cases but [are] not verified yet." Later heuristics, including [evrp-python](https://github.com/NeiH4207/evrp-python), report shorter routes on six of the seven small instances without lower bounds. This project solves the benchmark MILP where it can and bounds the rest by column generation.
+
+## Methods
+
+| Component | Model | Check |
+| --- | --- | --- |
+| [Routing](docs/ROUTING.md) | EVRP on a station-path multigraph (R1) | Brute-force enumeration on small instances |
+| [Routing bound](docs/ROUTING.md) | Set partitioning by column generation with rounded capacity cuts (R2) | Lagrangian bound valid at every exact pricing; replayed published solutions |
+| [Partial recharging](docs/ROUTING.md) | Convex MINLP with charging loss (R3) | Outer approximation; equals R1 when charging is free |
+| [Transit](docs/MODELS.md) | Battery-free fleet (M0); joint scheduling and charging MILP (M1) | Largest matching; enumeration of tiny timetables; schedule replay |
+| [Charging physics](docs/MODELS.md) | Convex MINLP with loss and taper (M2) | Outer approximation; barrier against HiGHS at fixed integers |
+| [Algorithms](docs/ALGORITHMS.md) | Primal-dual barrier method, outer approximation | Result contract |
+
+- Interior-point methods solve the convex charging subproblems inside outer approximation (Vanderbei, *Linear Programming*, 4th ed., 2014; Beck, *Introduction to Nonlinear Optimization*, 2014). Integer decisions are left to HiGHS and to outer approximation.
+- [Data](docs/DATA.md): inputs and provenance. [Validation](docs/VALIDATION.md): the checks. [Sources](docs/SOURCES.md): what each formulation rests on.
+
+## Scope
+
+- Small instances, one depot, homogeneous vehicles, no time windows, no driver duties, no distribution-network power flow.
+- Benchmark distances are unitless.
+- The sourced Route 100 scenarios price energy with BC Hydro's published fleet tariff and take the pack, consumption, charging efficiency and charger count from published sources. Charger power, the depot and the capital costs are declared, not agency data ([Data](docs/DATA.md) §3).
+- Not done: reproducing TransLink dispatch, authorizing infrastructure, matching the speed of VROOM, PyVRP or HiGHS's own MIP heuristics.
+
+## Execution
+
+- Requires stable Rust. HiGHS is compiled from source, which needs CMake and libclang (`python -m pip install cmake libclang` provides both; set `CMAKE` and `LIBCLANG_PATH`).
+- The benchmark is fetched from evrp-python at a pinned commit and checked against `data/evrp.sha256` (the loop in [.github/workflows/checks.yml](.github/workflows/checks.yml)).
+
+```text
+cargo test --workspace --release
+cargo run --release -p efo -- evrp E-n22-k4 R2 --time 1800    # R1 | R2 | R3 [--far K] [--alpha A]
+cargo run --release -p efo -- transit route100 M1 --until 8    # M0 | M1 | M2 [--scenario rs1640]
+cargo run --release -p efo -- replay E-n22-k4 routes.txt       # replay a route file
+cargo run --release -p efo -- report                           # tables and the block below
+```
+
+- Each run writes a bundle to `docs/results/`: the result record (status, U, L, gap, decisions), the case, the commit, the host, and the SHA-256 of every input.
+- The report admits a bundle only if its code was committed, its inputs are unchanged and the independent replay reproduces its U. It reads only the bundles of `docs/results`.
+- Bundle files are write-once: a complete, synced staging file is published without replacing an existing path. Publication requires a filesystem with hard-link support.
+- `--replace` moves the bundle of the same name to `archive/` beside it once the new run has finished; a fresh `--out DIR` keeps both.
+- R3 replay rejects negative or non-finite charge decisions, malformed charge keys, and keys that do not identify a station visit.
+- The two generated report pages are written sequentially: run `efo report` with one writer and publish them together in one commit.
+- GitHub Actions runs the Rust checks on Linux and Windows and regenerates the report on every push.
 
 ## Results
+
+Results are in [docs/results](docs/results/README.md), with every bundle and the transit and charging-physics tables. The block below is generated by `efo report` (it fails without the markers, and CI diffs it), so it cannot be removed from the README without changing `crates/efo/src/report.rs`.
 
 <!-- results:begin -->
 Regenerated by `efo report` from the admitted bundles in [docs/results](docs/results/README.md), produced by revision 8f07c5c. Every U is a replayed solution; every L comes from an admitted bundle.
@@ -20,73 +66,3 @@ Regenerated by `efo report` from the admitted bundles in [docs/results](docs/res
 | E-n76-k7 | 723.367517 | 949.652987 | 681.374346 | 28.250% | bracketed | 8f07c5c |
 | E-n101-k8 | 899.885589 | 1,227.484078 | 822.793692 | 32.969% | bracketed | 8f07c5c |
 <!-- results:end -->
-
-[docs/results](docs/results/README.md) holds every bundle with the transit and
-charging-physics tables.
-
-| Component | Model | Check |
-| --- | --- | --- |
-| [Routing](docs/ROUTING.md) | EVRP on a station-path multigraph (R1) | Brute-force enumeration on small instances |
-| [Routing bound](docs/ROUTING.md) | Set partitioning by column generation with rounded capacity cuts (R2) | Lagrangian bound valid at every exact pricing; replayed published solutions |
-| [Partial recharging](docs/ROUTING.md) | Convex MINLP with charging loss (R3) | Outer approximation; equals R1 when charging is free |
-| [Transit](docs/MODELS.md) | Battery-free fleet (M0); joint scheduling and charging MILP (M1) | Largest matching; enumeration of tiny timetables; schedule replay |
-| [Charging physics](docs/MODELS.md) | Convex MINLP with loss and taper (M2) | Outer approximation; barrier against HiGHS at fixed integers |
-| [Algorithms](docs/ALGORITHMS.md) | Primal-dual barrier method, outer approximation | Result contract |
-
-[Data](docs/DATA.md) states the inputs and their provenance, [Validation](docs/VALIDATION.md)
-the checks, and [Sources](docs/SOURCES.md) what each formulation rests on.
-
-## Methods and applications
-
-The IEEE WCCI-2020 competition report lists its EVRP values as upper bounds that "could be
-optimal in some cases but [are] not verified yet." Later heuristics, including
-[evrp-python](https://github.com/NeiH4207/evrp-python), report shorter routes on six of the
-seven small instances without lower bounds. This project solves the benchmark MILP where it
-can and bounds the rest by column generation; the table distinguishes certified results from
-open brackets.
-
-TransLink publishes Route 100's timetable as GTFS. Given its trips and declared battery,
-charger and grid parameters, the transit models compute the buses and chargers needed and
-their cost, from a battery-free fleet bound to a convex MINLP with charging losses.
-
-Interior-point methods solve the convex charging subproblems inside outer approximation
-(Vanderbei, *Linear Programming*, 4th ed., 2014; Beck, *Introduction to Nonlinear
-Optimization*, 2014); integer decisions are left to HiGHS and to outer approximation.
-
-## Scope
-
-Small instances. One depot, homogeneous vehicles, no time windows, no driver duties, no
-distribution-network power flow. Benchmark distances are unitless. The sourced Route 100
-scenarios price energy with BC Hydro's published fleet tariff and take the pack, consumption,
-charging efficiency and charger count from published sources; charger power, the depot and the
-capital costs are declared, not agency data ([Data](docs/DATA.md) §3). The project does not
-reproduce TransLink dispatch, authorize infrastructure, or match the speed of VROOM, PyVRP or
-HiGHS's own MIP heuristics.
-
-## Run
-
-Stable Rust. HiGHS is compiled from source, which needs CMake and libclang
-(`python -m pip install cmake libclang` provides both; set `CMAKE` and `LIBCLANG_PATH`). The
-benchmark is fetched from evrp-python at a pinned commit and checked against `data/evrp.sha256`
-(the loop in [.github/workflows/checks.yml](.github/workflows/checks.yml)).
-
-```text
-cargo test --workspace --release
-cargo run --release -p efo -- evrp E-n22-k4 R2 --time 1800    # R1 | R2 | R3 [--far K] [--alpha A]
-cargo run --release -p efo -- transit route100 M1 --until 8    # M0 | M1 | M2 [--scenario rs1640]
-cargo run --release -p efo -- replay E-n22-k4 routes.txt       # replay a route file
-cargo run --release -p efo -- report                           # tables and the block above
-```
-
-Each run writes a bundle to `docs/results/`: the result record (status, U, L, gap, decisions),
-the case, the commit, the host, and the SHA-256 of every input. The report admits a bundle only
-if its code was committed, its inputs are unchanged and the independent replay reproduces its U.
-Bundle files are write-once: a complete, synced staging file is published without replacing an
-existing path. `--replace` moves the bundle of the same name to `archive/` beside it once the new
-run has finished; a fresh `--out DIR` keeps both. The report reads only the bundles of `docs/results`. Publication requires a
-filesystem with hard-link support. R3 replay rejects negative or non-finite charge decisions,
-malformed charge keys, and keys that do not identify a station visit.
-The two generated report pages are written sequentially; run `efo report` with one writer and
-publish them together in one commit.
-GitHub Actions runs the Rust checks on Linux and Windows and regenerates the report on every
-push.
