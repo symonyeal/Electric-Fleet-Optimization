@@ -203,7 +203,10 @@ externally. Containment, and the bound it would give, holds for a per-bus form w
 the assignment problem of M0 with costs. Its matrix is the incidence matrix of a bipartite graph, so it is totally unimodular
 and an integral optimum is a least-cost cover of the trips by duties on the compatibility DAG. Its value is a lower bound on
 M1, since every other term of (1) is nonnegative. With every x fixed at that cover, the rest of M1 is the charging plan of those
-duties, a small MILP; its optimum, when one exists, is a schedule of M1 and is passed to HiGHS as its first incumbent. The rows,
+duties, a small MILP; its optimum, when one exists, is a schedule of M1 and is passed to HiGHS as its first incumbent. The
+cover is the simplex vertex of the assignment LP, integral by unimodularity. Covers tie often: on the full day the MIP's choice
+among the tied covers charges at 8,020.10 instead of 8,046.01 but its plan took 167 s to solve against 1.7 s, so the vertex is
+used. The rows,
 the costs and HiGHS's options are unchanged, and without `--cover` the run is the one before. Measured on Route 100 (i5-1335U,
 one thread per run, two to four runs at a time, HiGHS logs in the working notes):
 

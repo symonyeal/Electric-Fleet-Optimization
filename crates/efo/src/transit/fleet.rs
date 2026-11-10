@@ -303,14 +303,16 @@ fn schedule(md: &Model, x: &[f64], loss: bool) -> (serde_json::Value, Option<f64
     (detail, rp.ok.then_some(rp.cost), rp.ok)
 }
 
-/// The cover start of M1 (Models §4): (the cover's value, a point of md.lp or None).
+/// The cover start of M1 (Models §4) within time seconds, the charging plan at relative gap gap:
+/// (the cover's value, a point of md.lp or None).
 ///
 /// The degree rows (2), (3) with the pull-out, pull-in and connection costs alone are the
-/// assignment problem of M0 with costs, totally unimodular: an integral optimum is a least-cost
-/// cover of the trips by duties on the compatibility DAG, and its value bounds M1 below, since
+/// assignment problem of M0 with costs, totally unimodular: the simplex vertex of its LP is
+/// integral, a least-cost cover of the trips by duties on the compatibility DAG (a vertex that is
+/// not integral gives no start), and its value bounds M1 below, since
 /// every other term of M1 is nonnegative. With all x fixed at that cover, the rest of md.lp is
 /// the charging plan of those duties; its optimum, when one exists, is a point of M1.
-pub fn cover(md: &Model, time: f64) -> (Option<f64>, Option<Vec<f64>>) {
+pub fn cover(md: &Model, time: f64, gap: f64) -> (Option<f64>, Option<Vec<f64>>) {
     let t0 = Instant::now();
     let (n, k) = (md.m.c.trips.len(), md.xc + md.m.arcs.len());
     let lp = &md.lp;
@@ -318,19 +320,23 @@ pub fn cover(md: &Model, time: f64) -> (Option<f64>, Option<Vec<f64>>) {
         c: lp.c[..k].to_vec(),
         l: lp.l[..k].to_vec(),
         u: lp.u[..k].to_vec(),
-        int: lp.int[..k].to_vec(),
+        int: vec![false; k],
         rows: lp.rows[..2 * n].to_vec(), // rows() writes the degree rows first
     };
+    // The vertex, not a MIP optimum: ties among covers are common, and the MIP's choice on the full
+    // Route 100 day took 167 s to charge against 1.7 s for the vertex's (Models §4).
     let s = core.solve(time, 0.0);
-    let Some(x) = s.x.filter(|_| s.status == "optimal") else {
-        return (None, None);
+    let Some(x) =
+        s.x.filter(|x| s.status == "optimal" && x.iter().all(|v| (v - v.round()).abs() <= 1e-9))
+    else {
+        return (s.f, None);
     };
     let mut fixed = lp.clone();
     for j in 0..k {
         (fixed.l[j], fixed.u[j]) = (x[j].round(), x[j].round());
     }
     let left = (time - t0.elapsed().as_secs_f64()).max(0.0);
-    (s.f, fixed.solve(left, 0.0).x)
+    (s.f, fixed.solve(left, gap).x)
 }
 
 /// M1 by HiGHS within time seconds at relative gap gap, from the cover start when start; U is
@@ -348,7 +354,7 @@ pub fn m1(
     let md = rows(c, v, fixed, false);
     let (mut first, mut left, mut x0) = (json!(null), time, None);
     if start {
-        let (cv, x) = cover(&md, time);
+        let (cv, x) = cover(&md, time, gap);
         first = json!({"cover": cv, "found": x.is_some(), "seconds": t0.elapsed().as_secs_f64()});
         (left, x0) = ((time - t0.elapsed().as_secs_f64()).max(1e-3), x);
     }
@@ -569,7 +575,7 @@ mod tests {
         }
         let (c, v) = crate::transit::fixtures::route100();
         let md = rows(&c, &v, &Infra::new(), false);
-        let (cv, x) = cover(&md, 120.0);
+        let (cv, x) = cover(&md, 120.0, 1e-6);
         let x = x.unwrap();
         assert!(md.lp.feasible(&x, 1e-5));
         let (d, u, ok) = schedule(&md, &x, false);
