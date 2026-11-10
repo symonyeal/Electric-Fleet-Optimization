@@ -24,8 +24,10 @@ M0 is the battery-free fleet; M1 schedules and charges the declared 250 kWh flee
 |---|---|---:|---:|---:|---:|---|---:|---|
 | route100 | M0 | 16 | 16 | 16 | 0.000% | optimal | 0.0 | AMD Ryzen 7 PRO 6850U with Radeon Graphics |
 | route100 | M1 | 22 | 11,484.08 | 7,068.95 | 38.446% | feasible_limit | 1803.7 | AMD Ryzen 7 PRO 6850U with Radeon Graphics |
+| route100-cover | M1 | 16 | 8,046.01 | 7,071.51 | 12.111% | feasible_limit | 1800.2 | 13th Gen Intel(R) Core(TM) i5-1335U |
 | route100-until10h | M0 | 16 | 16 | 16 | 0.000% | optimal | 0.0 | AMD Ryzen 7 PRO 6850U with Radeon Graphics |
 | route100-until10h | M1 | 16 | 7,123.65 | 7,066.95 | 0.796% | feasible_limit | 900.1 | AMD Ryzen 7 PRO 6850U with Radeon Graphics |
+| route100-until10h-cover | M1 | 16 | 7,123.65 | 7,062.95 | 0.852% | feasible_limit | 900.0 | 13th Gen Intel(R) Core(TM) i5-1335U |
 | route100-until8h | M0 | 16 | 16 | 16 | 0.000% | optimal | 0.0 | AMD Ryzen 7 PRO 6850U with Radeon Graphics |
 | route100-until8h | M1 | 16 | 7,046.57 | 7,046.56 | 0.000% | optimal | 276.6 | AMD Ryzen 7 PRO 6850U with Radeon Graphics |
 
