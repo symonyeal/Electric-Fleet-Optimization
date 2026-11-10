@@ -103,6 +103,11 @@ impl Lp {
 
     /// HiGHS on the program, single-threaded, within time seconds and relative MIP gap gap.
     pub fn solve(&self, time: f64, gap: f64) -> Solve {
+        self.solve_from(time, gap, None)
+    }
+
+    /// solve, with start (a point of every column) passed to HiGHS as its first incumbent.
+    pub fn solve_from(&self, time: f64, gap: f64, start: Option<&[f64]>) -> Solve {
         let fail = |status| Solve {
             status,
             x: None,
@@ -141,6 +146,10 @@ impl Lp {
         model.make_quiet();
         model.set_option("time_limit", time.max(1e-3));
         model.set_option("mip_rel_gap", gap);
+        if let Some(x) = start {
+            assert_eq!(x.len(), self.n(), "a start gives every column");
+            model.set_solution(Some(x), None, None, None);
+        }
         let Ok(s) = model.try_solve() else {
             return fail("numerical");
         };

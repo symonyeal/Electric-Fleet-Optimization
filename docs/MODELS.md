@@ -199,6 +199,40 @@ boundary inside a horizon that includes recovery charging, whereas this form end
 externally. Containment, and the bound it would give, holds for a per-bus form with the same external restoration term. On Route
 100 consecutive trips alternate terminals, and both terminals are sites.
 
+*Cover start* (`--cover`, `fleet::cover`). The degree rows (2), (3) with the pull-out, pull-in and connection costs alone are
+the assignment problem of M0 with costs. Its matrix is the incidence matrix of a bipartite graph, so it is totally unimodular
+and an integral optimum is a least-cost cover of the trips by duties on the compatibility DAG. Its value is a lower bound on
+M1, since every other term of (1) is nonnegative. With every x fixed at that cover, the rest of M1 is the charging plan of those
+duties, a small MILP; its optimum, when one exists, is a schedule of M1 and is passed to HiGHS as its first incumbent. The rows,
+the costs and HiGHS's options are unchanged, and without `--cover` the run is the one before. Measured on Route 100 (i5-1335U,
+one thread per run, two to four runs at a time, HiGHS logs in the working notes):
+
+| Case | Start | First incumbent | U at the limit | L at the limit | Gap at the limit | Time to the baseline's final gap |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| full day, 1800 s | none (baseline) | 502.4 s, 22 buses | 11,484.08 | 7,068.95 | 38.45% | 507.6 s |
+| full day, 1800 s | GTFS blocks, charging fixed as below | 1.2 s, 23 buses | 11,134.85 | 7,068.95 | 36.52% | 3.8 s |
+| full day, 1800 s | cover | 2.3 s, 16 buses | 8,046.01 | 7,071.51 | 12.11% | 8.0 s |
+| until 10 h, 900 s | none, seeds 0 / 1 | 16 buses | 7,123.65 | 7,067.21 / 7,058.56 | 0.79% / 0.91% | 866.8 s / not reached |
+| until 10 h, 900 s | cover, seeds 0 / 1 | 0.0 s, 16 buses | 7,123.65 | 7,062.95 / 7,062.80 | 0.85% / 0.85% | not reached |
+
+On the full day the gain is the incumbent: HiGHS finds no schedule for 502 s and then holds 22 buses, while the cover gives
+M0's least fleet of 16 with a feasible charging plan in 2.3 s; the agency's blocks, the simplest start that uses no graph
+algorithm, reach the baseline's gap sooner (3.8 s against 8.0 s) but hold 23 buses and a 36.52% gap for the whole run, so the
+cover is credited only with its incumbent: 16 buses and a 12.11% gap that no other start reached. The bound is HiGHS's in
+every row and ends within 3 of the baseline's whatever the start. Until 10 h HiGHS already holds the cover's schedule, the gap is on the bound side, and the cover's bound
+differs from the baseline's by less than the baseline's own spread over two seeds: no effect either way.
+
+Rejected, with their numbers. The flow core does not tighten M1: its LP is 7,025.95 against M1's 7,035.09 (full day) and
+6,938.03 against 6,955.40 (until 10 h). Cutting each big-M of the energy links to the least value valid over the variable
+boxes raises the root LP only to 7,035.91, the value HiGHS's presolve already reaches (7,035.906228 in its log); from that model HiGHS holds 22 buses at 1800 s, U 11,477.38, L 7,068.30, and reaches 38.45% only at 1111.0 s. Every compatibility arc
+is energy-feasible, the DAG has only singleton strongly connected components, and the connection form has no bus index, so
+reachability, component and vehicle-symmetry reductions remove nothing. Reduced-cost fixing against the cover's U removes no
+arc of 21,041 on the full day (root gap 1,011, arc costs at most tens) and 730 of 1,774 until 10 h, where one run from the cover start reached the baseline's final gap at 474.4 s against 866.8 s (1.83 times; L 7,069.44 at 900 s), below a factor of two and within the seed spread above, so it is not adopted.
+Dropping connections that wait more than an hour (18,918 of 21,041 arcs) and searching from the cover for 600 s left U at 8,046.01; that restricted model's bound is not a bound on M1. Duty pricing by labeling with the battery as a resource, a
+column-generation bound for M1, was not built: its pricing must carry slot-coupled plug, grid and peak duals with continuous
+charging (§5 of [Algorithms](ALGORITHMS.md) names it a substantial independent problem), and the only measured headroom is the
+full day's L, 7,071.51 against U 8,046.01.
+
 Rows (5) and (6) are summed per site and slot over the windows present, with the base load L_s y_s in every capacity and peak
 row; the rows L_s y_s <= G0_s + h_s and D_s >= L_s y_s are written once per site, so the meter's obligations do not depend on
 which slots carry a charging variable. `crates/efo/src/transit/mod.rs` compiles the instance (compatibility arcs, deadhead

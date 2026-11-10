@@ -36,7 +36,7 @@
 ```text
 cargo test --workspace --release
 cargo run --release -p efo -- evrp E-n22-k4 R2 --time 1800    # R1 | R2 | R3 [--far K] [--alpha A]
-cargo run --release -p efo -- transit route100 M1 --until 8    # M0 | M1 | M2 [--scenario rs1640]
+cargo run --release -p efo -- transit route100 M1 --until 8    # M0 | M1 | M2 [--scenario rs1640] [--cover: M1 only]
 cargo run --release -p efo -- replay E-n22-k4 routes.txt       # replay a route file
 cargo run --release -p efo -- report                           # tables and the block below
 ```

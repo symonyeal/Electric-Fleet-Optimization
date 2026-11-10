@@ -303,12 +303,56 @@ fn schedule(md: &Model, x: &[f64], loss: bool) -> (serde_json::Value, Option<f64
     (detail, rp.ok.then_some(rp.cost), rp.ok)
 }
 
-/// M1 by HiGHS within time seconds at relative gap gap; U is the replayed cost of the schedule,
-/// which must agree with the model's objective.
-pub fn m1(c: &Corridor, v: &Transit, name: &str, fixed: &Infra, time: f64, gap: f64) -> Record {
+/// The cover start of M1 (Models §4): (the cover's value, a point of md.lp or None).
+///
+/// The degree rows (2), (3) with the pull-out, pull-in and connection costs alone are the
+/// assignment problem of M0 with costs, totally unimodular: an integral optimum is a least-cost
+/// cover of the trips by duties on the compatibility DAG, and its value bounds M1 below, since
+/// every other term of M1 is nonnegative. With all x fixed at that cover, the rest of md.lp is
+/// the charging plan of those duties; its optimum, when one exists, is a point of M1.
+pub fn cover(md: &Model, time: f64) -> (Option<f64>, Option<Vec<f64>>) {
+    let t0 = Instant::now();
+    let (n, k) = (md.m.c.trips.len(), md.xc + md.m.arcs.len());
+    let lp = &md.lp;
+    let core = Lp {
+        c: lp.c[..k].to_vec(),
+        l: lp.l[..k].to_vec(),
+        u: lp.u[..k].to_vec(),
+        int: lp.int[..k].to_vec(),
+        rows: lp.rows[..2 * n].to_vec(), // rows() writes the degree rows first
+    };
+    let s = core.solve(time, 0.0);
+    let Some(x) = s.x.filter(|_| s.status == "optimal") else {
+        return (None, None);
+    };
+    let mut fixed = lp.clone();
+    for j in 0..k {
+        (fixed.l[j], fixed.u[j]) = (x[j].round(), x[j].round());
+    }
+    let left = (time - t0.elapsed().as_secs_f64()).max(0.0);
+    (s.f, fixed.solve(left, 0.0).x)
+}
+
+/// M1 by HiGHS within time seconds at relative gap gap, from the cover start when start; U is
+/// the replayed cost of the schedule, which must agree with the model's objective.
+pub fn m1(
+    c: &Corridor,
+    v: &Transit,
+    name: &str,
+    fixed: &Infra,
+    time: f64,
+    gap: f64,
+    start: bool,
+) -> Record {
     let t0 = Instant::now();
     let md = rows(c, v, fixed, false);
-    let s = md.lp.solve(time, gap);
+    let (mut first, mut left, mut x0) = (json!(null), time, None);
+    if start {
+        let (cv, x) = cover(&md, time);
+        first = json!({"cover": cv, "found": x.is_some(), "seconds": t0.elapsed().as_secs_f64()});
+        (left, x0) = ((time - t0.elapsed().as_secs_f64()).max(1e-3), x);
+    }
+    let s = md.lp.solve_from(left, gap, x0.as_deref());
     let (sched, u, ok) = s.x.as_ref().map_or((json!(null), None, None), |x| {
         let (d, u, ok) = schedule(&md, x, false);
         (d, u, Some(ok))
@@ -326,7 +370,8 @@ pub fn m1(c: &Corridor, v: &Transit, name: &str, fixed: &Infra, time: f64, gap: 
             message: format!("HiGHS {}", s.status),
             elapsed: t0.elapsed().as_secs_f64(),
             detail: json!({"formulation": M1, "time_limit": time, "mip_rel_gap": gap, "trips": c.trips.len(),
-            "variables": md.lp.n(), "rows": md.lp.rows.len(), "nodes": s.nodes, "schedule": sched}),
+            "variables": md.lp.n(), "rows": md.lp.rows.len(), "nodes": s.nodes, "schedule": sched,
+            "start": first}),
         },
     )
 }
@@ -503,12 +548,33 @@ mod tests {
         ];
         for (seed, &(z, free)) in want.iter().enumerate() {
             let (c, v) = tiny(seed);
-            let r = m1(&c, &v, "tiny", &fix(), 60.0, 1e-6);
+            let r = m1(&c, &v, "tiny", &fix(), 60.0, 1e-6, false);
             assert!(r.certified && close(r.u.unwrap(), z), "{seed}: {r:?}");
             assert!(close(enumerate(&c, &v, "A", 1.0, 500.0).0, z), "{seed}");
-            let r = m1(&c, &v, "tiny", &Infra::new(), 60.0, 1e-6);
+            let r = m1(&c, &v, "tiny", &Infra::new(), 60.0, 1e-6, false);
             assert!(r.certified && close(r.u.unwrap(), free), "{seed}");
         }
+    }
+
+    #[test]
+    fn the_cover_start_keeps_the_optimum_and_bounds_m1() {
+        // From the cover start M1 certifies the enumeration optimum; on the full Route 100 day the
+        // cover is 16 duties (M0's least fleet) whose charging plan replays at no less than the
+        // cover's value.
+        for seed in 0..6 {
+            let (c, v) = tiny(seed);
+            let r = m1(&c, &v, "tiny", &fix(), 60.0, 1e-6, true);
+            let z = enumerate(&c, &v, "A", 1.0, 500.0).0;
+            assert!(r.certified && close(r.u.unwrap(), z), "{seed}: {r:?}");
+        }
+        let (c, v) = crate::transit::fixtures::route100();
+        let md = rows(&c, &v, &Infra::new(), false);
+        let (cv, x) = cover(&md, 120.0);
+        let x = x.unwrap();
+        assert!(md.lp.feasible(&x, 1e-5));
+        let (d, u, ok) = schedule(&md, &x, false);
+        assert!(ok && d["fleet"].as_u64() == Some(16));
+        assert!(cv.unwrap() <= u.unwrap() + 1e-6);
     }
 
     #[test]
@@ -522,7 +588,7 @@ mod tests {
                 v.sites.get_mut("A").unwrap().g0,
             ) = (10.0, g0);
             v.cost.site = 1e6;
-            let r = m1(&c, &v, "tiny", &Infra::new(), 60.0, 1e-6);
+            let r = m1(&c, &v, "tiny", &Infra::new(), 60.0, 1e-6, false);
             assert!(
                 r.detail["schedule"]["infra"]
                     .as_object()
@@ -537,7 +603,7 @@ mod tests {
             v.sites.get_mut("A").unwrap().l = 10.0;
             (v.cost.peak_from, v.cost.peak_to) = (Some(0.0), Some(1.0));
             let z = enumerate(&c, &v, "A", 1.0, 500.0).0;
-            let r = m1(&c, &v, "tiny", &fix(), 60.0, 1e-6);
+            let r = m1(&c, &v, "tiny", &fix(), 60.0, 1e-6, false);
             assert!(r.certified && close(r.u.unwrap(), z), "{seed}");
             assert!(
                 (r.detail["schedule"]["replay"]["parts"]["peak"]

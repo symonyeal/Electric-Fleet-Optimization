@@ -7,12 +7,13 @@ use std::process::ExitCode;
 
 const USAGE: &str = "usage:
   efo evrp <instance> R1|R2|R3 [--time S] [--far K] [--alpha A] [--out DIR] [--replace]
-  efo transit <corridor> M0|M1|M2 [--time S] [--until H] [--scenario NAME] [--battery KWH] [--alpha A] [--out DIR] [--replace]
+  efo transit <corridor> M0|M1|M2 [--time S] [--until H] [--scenario NAME] [--battery KWH] [--alpha A] [--cover] [--out DIR] [--replace]
   efo replay <instance> <routes file>
   efo report
 
 Run from the repository root. A case writes docs/results/<track>/<stem>.json unless --out is given;
---replace moves an existing bundle of that name to archive/ beside it, once the new run has finished.";
+--replace moves an existing bundle of that name to archive/ beside it, once the new run has finished.
+--cover starts M1 from the least-cost cover of the trips with its charging plan (Models §4).";
 
 fn value<T: std::str::FromStr>(flag: &str, v: Option<&String>) -> Result<T, String> {
     v.ok_or(format!("{flag} needs a value"))?
@@ -34,10 +35,12 @@ fn case(args: &[String]) -> Result<(Case, Option<PathBuf>, bool), String> {
         scenario: None,
         battery: None,
         alpha: None,
+        cover: false,
     };
     let mut out = None;
     let replace = rest.iter().any(|a| a == "--replace");
-    let mut it = rest.iter().filter(|a| *a != "--replace");
+    c.cover = rest.iter().any(|a| a == "--cover");
+    let mut it = rest.iter().filter(|a| *a != "--replace" && *a != "--cover");
     while let Some(flag) = it.next() {
         let v = it.next();
         match (flag.as_str(), track.as_str()) {
@@ -53,6 +56,9 @@ fn case(args: &[String]) -> Result<(Case, Option<PathBuf>, bool), String> {
     }
     if !(c.time > 0.0 && c.time.is_finite()) {
         return Err("--time must be positive".into());
+    }
+    if c.cover && !(c.track == "transit" && c.model == "M1") {
+        return Err("--cover applies to transit M1".into());
     }
     if c.alpha.is_some() && !matches!(c.model.as_str(), "R3" | "M2") {
         return Err("--alpha applies to R3 and M2".into());
@@ -86,6 +92,7 @@ fn main_() -> Result<(), String> {
                 scenario: None,
                 battery: None,
                 alpha: None,
+                cover: false,
             };
             let p = run::instance(root, &c, &mut run::Files::new())?;
             let r = evrp::replay::replay(&p, &evrp::replay::read_routes(Path::new(routes))?, true);

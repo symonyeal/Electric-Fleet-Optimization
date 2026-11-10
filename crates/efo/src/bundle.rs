@@ -34,10 +34,13 @@ pub struct Case {
     pub battery: Option<f64>,
     /// The loss coefficient, replacing the scenario's.
     pub alpha: Option<f64>,
+    /// M1: start HiGHS from the cover start (fleet::cover); absent in earlier bundles.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub cover: bool,
 }
 
 impl Case {
-    /// <instance>[-far<k>][-<scenario>][-until<H>h][-B<kWh>][-alpha<a>]-<model>.
+    /// <instance>[-far<k>][-<scenario>][-until<H>h][-B<kWh>][-alpha<a>][-cover]-<model>.
     pub fn stem(&self) -> String {
         let mut s = self.instance.clone();
         if let Some(k) = self.far {
@@ -54,6 +57,9 @@ impl Case {
         }
         if let Some(a) = self.alpha {
             s += &format!("-alpha{a:e}");
+        }
+        if self.cover {
+            s += "-cover";
         }
         s + "-" + &self.model
     }
@@ -244,6 +250,7 @@ mod tests {
                 scenario: None,
                 battery: None,
                 alpha: None,
+                cover: false,
             },
             code: Code {
                 commit: "test".into(),

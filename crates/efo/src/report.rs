@@ -164,6 +164,7 @@ fn evrp_rows(root: &Path, c: &Collected) -> Vec<String> {
             scenario: None,
             battery: None,
             alpha: None,
+            cover: false,
         };
         let Ok(p) = run::instance(root, &probe, &mut files) else {
             continue;

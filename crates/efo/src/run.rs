@@ -146,7 +146,7 @@ pub fn run(root: &Path, case: &Case) -> Result<(Record, Files), String> {
             let name = name.strip_suffix(&format!("-{m}")).unwrap_or(&name);
             match m {
                 "M0" => m0(&c, &v, name),
-                "M1" => fleet::m1(&c, &v, name, &BTreeMap::new(), case.time, 1e-6),
+                "M1" => fleet::m1(&c, &v, name, &BTreeMap::new(), case.time, 1e-6, case.cover),
                 "M2" => fleet::m2(&c, &v, name, &BTreeMap::new(), 40, case.time),
                 _ => return Err(format!("transit models are M0, M1, M2, not {m}")),
             }
