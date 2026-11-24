@@ -160,6 +160,24 @@ pub fn run(root: &Path, case: &Case) -> Result<(Record, Files), String> {
     Ok((r, files))
 }
 
+fn charges(value: serde_json::Value) -> Result<BTreeMap<(usize, usize), (f64, f64)>, String> {
+    let ch: BTreeMap<String, (f64, f64)> =
+        serde_json::from_value(value).map_err(|e| e.to_string())?;
+    let ch: BTreeMap<(usize, usize), _> = ch
+        .into_iter()
+        .map(|(k, v)| {
+            let key = k
+                .split_once(':')
+                .and_then(|(a, z)| Some((a.parse::<usize>().ok()?, z.parse::<usize>().ok()?)));
+            match key {
+                Some((a, z)) if k == format!("{a}:{z}") => Ok(((a, z), v)),
+                _ => Err(format!("invalid charge key {k:?}: expected route:position")),
+            }
+        })
+        .collect::<Result<_, _>>()?;
+    Ok(ch)
+}
+
 /// U recomputed by the independent replay from the stored decisions, None when they do not
 /// replay; with the inputs' current digests.
 pub fn replayed(root: &Path, b: &Bundle) -> Result<(Option<f64>, Files), String> {
@@ -183,22 +201,7 @@ pub fn replayed(root: &Path, b: &Bundle) -> Result<(Option<f64>, Files), String>
                 (None, _) => None,
                 (Some(r), "R3") => {
                     let sc = sc.as_ref().unwrap();
-                    let ch: BTreeMap<String, (f64, f64)> =
-                        serde_json::from_value(get("charges")).map_err(json)?;
-                    let ch: BTreeMap<(usize, usize), _> = ch
-                        .into_iter()
-                        .map(|(k, v)| {
-                            let key = k.split_once(':').and_then(|(a, z)| {
-                                Some((a.parse::<usize>().ok()?, z.parse::<usize>().ok()?))
-                            });
-                            match key {
-                                Some((a, z)) if k == format!("{a}:{z}") => Ok(((a, z), v)),
-                                _ => Err(format!(
-                                    "invalid charge key {k:?}: expected route:position"
-                                )),
-                            }
-                        })
-                        .collect::<Result<_, _>>()?;
+                    let ch = charges(get("charges"))?;
                     let rp = replay::replay_charge(&p, sc, &r, &ch);
                     rp.ok.then_some(rp.cost)
                 }

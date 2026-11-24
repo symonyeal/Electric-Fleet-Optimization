@@ -68,8 +68,8 @@ pub fn rows<'a>(c: &'a Corridor, v: &'a Transit, fixed: &Infra, loss: bool) -> M
     let m = compile(c, v);
     let n = c.trips.len();
     let (co, ch) = (&v.cost, &v.charger);
-    let (rho, w0, w1) = co.tariff();
-    let (eta, pm, dt, h) = (ch.eta, ch.p, v.time.delta, v.time.delta / 3600.0);
+    let (rho, _, _) = co.tariff();
+    let (eta, pm, h) = (ch.eta, ch.p, v.time.delta / 3600.0);
     let gbar = pm / eta + ch.alpha * pm * pm;
     let slots: Vec<(usize, i64)> = m
         .win
@@ -161,6 +161,48 @@ pub fn rows<'a>(c: &'a Corridor, v: &'a Transit, fixed: &Infra, loss: bool) -> M
         );
         lp.le(vec![(r + i, 1.0), (x1 + i, -(m.s0b - m.rb))], 0.0);
     }
+    charging_rows(
+        &mut lp,
+        &m,
+        &slots,
+        &sites,
+        [a, y, p, u, o, nn, hh, dd, x0, xc],
+        g,
+    );
+    Model {
+        m,
+        lp,
+        slots,
+        sites,
+        x0,
+        x1,
+        xc,
+        r,
+        p,
+        u,
+        g,
+        o,
+        nn,
+        hh,
+    }
+}
+
+/// Charging, presence and site-capacity rows, in the original matrix order.
+fn charging_rows(
+    lp: &mut Lp,
+    m: &Instance,
+    slots: &[(usize, i64)],
+    sites: &[String],
+    columns: [usize; 10],
+    g: Option<usize>,
+) {
+    let [a, y, p, u, o, nn, hh, dd, x0, xc] = columns;
+    let (c, v) = (m.c, m.v);
+    let n = c.trips.len();
+    let ch = &v.charger;
+    let (eta, pm, dt, h) = (ch.eta, ch.p, v.time.delta, v.time.delta / 3600.0);
+    let (_, w0, w1) = v.cost.tariff();
+    let gbar = pm / eta + ch.alpha * pm * pm;
     let at: BTreeMap<(usize, i64), usize> =
         slots.iter().enumerate().map(|(k, &jt)| (jt, k)).collect();
     for j in 0..n {
@@ -239,22 +281,6 @@ pub fn rows<'a>(c: &'a Corridor, v: &'a Transit, fixed: &Infra, loss: bool) -> M
             );
             lp.le(row, pm);
         }
-    }
-    Model {
-        m,
-        lp,
-        slots,
-        sites,
-        x0,
-        x1,
-        xc,
-        r,
-        p,
-        u,
-        g,
-        o,
-        nn,
-        hh,
     }
 }
 

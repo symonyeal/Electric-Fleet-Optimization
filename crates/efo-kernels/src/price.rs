@@ -249,40 +249,8 @@ impl Graph {
                         continue;
                     }
                 }
-                let dominated = at[j].iter().any(|&h| {
-                    let h = &lab[h as usize];
-                    h.cb <= new.cb + tol
-                        && h.q <= new.q + tol
-                        && h.y >= new.y - tol
-                        && h.m & !new.m == 0
-                });
-                if dominated {
+                if !retain_label(new, &lab, &mut at[j], &mut alive, cap, tol) {
                     continue;
-                }
-                at[j].retain(|&h| {
-                    let hl = &lab[h as usize];
-                    let gone = new.cb <= hl.cb + tol
-                        && new.q <= hl.q + tol
-                        && new.y >= hl.y - tol
-                        && new.m & !hl.m == 0;
-                    if gone {
-                        alive[h as usize] = false;
-                    }
-                    !gone
-                });
-                if let Some(kmax) = cap
-                    && at[j].len() >= kmax
-                {
-                    let (wpos, &worst) = at[j]
-                        .iter()
-                        .enumerate()
-                        .max_by(|a, b| lab[*a.1 as usize].cb.total_cmp(&lab[*b.1 as usize].cb))
-                        .unwrap();
-                    if lab[worst as usize].cb <= new.cb {
-                        continue;
-                    }
-                    alive[worst as usize] = false;
-                    at[j].swap_remove(wpos);
                 }
                 let id = lab.len() as u32;
                 lab.push(new);
@@ -308,6 +276,50 @@ impl Graph {
             .collect();
         Priced { best, exact, cols }
     }
+}
+
+/// Maintain the nondominated labels and the optional per-node heuristic cap.
+fn retain_label(
+    new: Label,
+    lab: &[Label],
+    at: &mut Vec<u32>,
+    alive: &mut [bool],
+    cap: Option<usize>,
+    tol: f64,
+) -> bool {
+    let dominated = at.iter().any(|&h| {
+        let h = &lab[h as usize];
+        h.cb <= new.cb + tol && h.q <= new.q + tol && h.y >= new.y - tol && h.m & !new.m == 0
+    });
+    if dominated {
+        return false;
+    }
+    at.retain(|&h| {
+        let hl = &lab[h as usize];
+        let gone = new.cb <= hl.cb + tol
+            && new.q <= hl.q + tol
+            && new.y >= hl.y - tol
+            && new.m & !hl.m == 0;
+        if gone {
+            alive[h as usize] = false;
+        }
+        !gone
+    });
+    if let Some(kmax) = cap
+        && at.len() >= kmax
+    {
+        let (wpos, &worst) = at
+            .iter()
+            .enumerate()
+            .max_by(|a, b| lab[*a.1 as usize].cb.total_cmp(&lab[*b.1 as usize].cb))
+            .unwrap();
+        if lab[worst as usize].cb <= new.cb {
+            return false;
+        }
+        alive[worst as usize] = false;
+        at.swap_remove(wpos);
+    }
+    true
 }
 
 fn gcd(a: u64, b: u64) -> u64 {

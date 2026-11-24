@@ -101,9 +101,9 @@ fn fail(path: &Path, why: impl std::fmt::Display) -> String {
     format!("{}: {why}", path.display())
 }
 
-/// Read a CEC-2020 EUC_2D file.
-pub fn read(path: &Path) -> Result<Instance, String> {
-    let text = fs::read_to_string(path).map_err(|e| fail(path, e))?;
+type Sections<'a> = BTreeMap<&'a str, Vec<Vec<&'a str>>>;
+
+fn sections(text: &str) -> (BTreeMap<String, String>, Sections<'_>) {
     const SECTIONS: [&str; 4] = [
         "NODE_COORD_SECTION",
         "DEMAND_SECTION",
@@ -126,26 +126,12 @@ pub fn read(path: &Path) -> Result<Instance, String> {
             head.insert(k.trim().to_ascii_uppercase(), v.trim().to_owned());
         }
     }
-    let get = |k: &str| {
-        head.get(k)
-            .map(String::as_str)
-            .ok_or_else(|| fail(path, format!("no {k}")))
-    };
-    let num = |k: &str| -> Result<f64, String> {
-        get(k)?.parse().map_err(|e| fail(path, format!("{k}: {e}")))
-    };
+    (head, sec)
+}
+
+fn coordinates(path: &Path, xy: &[Vec<&str>], n: usize) -> Result<Vec<[f64; 2]>, String> {
     let parse =
         |s: &str| -> Result<f64, String> { s.parse().map_err(|e| fail(path, format!("{s}: {e}"))) };
-    let rows = |s: &str| sec.get(s).cloned().unwrap_or_default();
-    let kind = get("EDGE_WEIGHT_TYPE").or_else(|_| get("EDGE_WEIGHT_FORMAT"))?;
-    if kind != "EUC_2D" {
-        return Err(fail(
-            path,
-            format!("edge weight {kind}, only EUC_2D is read"),
-        ));
-    }
-    let n = num("DIMENSION")? as usize;
-    let xy = rows("NODE_COORD_SECTION");
     if xy.len() != n
         || xy
             .iter()
@@ -161,6 +147,60 @@ pub fn read(path: &Path) -> Result<Instance, String> {
         .iter()
         .map(|t| Ok([parse(t[1])?, parse(t[2])?]))
         .collect::<Result<Vec<_>, String>>()?;
+    Ok(x)
+}
+
+fn demands<'a>(
+    path: &Path,
+    rows: Vec<Vec<&'a str>>,
+    n: usize,
+    id: impl Fn(&Vec<&'a str>) -> Result<usize, String>,
+) -> Result<(Vec<f64>, Vec<usize>), String> {
+    let parse =
+        |s: &str| -> Result<f64, String> { s.parse().map_err(|e| fail(path, format!("{s}: {e}"))) };
+    let mut b = vec![0.0; n];
+    let mut seen = Vec::new();
+    for t in rows {
+        let k = id(&t)?;
+        b[k] = parse(t.get(1).ok_or_else(|| fail(path, "short demand row"))?)?;
+        seen.push(k);
+    }
+    Ok((b, seen))
+}
+
+fn validate_demands(path: &Path, p: &Instance, seen: &mut Vec<usize>) -> Result<(), String> {
+    let mut want = p.i.clone();
+    want.push(p.o);
+    want.sort_unstable();
+    seen.sort_unstable();
+    if *seen != want || p.b[p.o] != 0.0 {
+        return Err(fail(path, "demands do not cover the depot and customers"));
+    }
+    Ok(())
+}
+
+/// Read a CEC-2020 EUC_2D file.
+pub fn read(path: &Path) -> Result<Instance, String> {
+    let text = fs::read_to_string(path).map_err(|e| fail(path, e))?;
+    let (head, sec) = sections(&text);
+    let get = |k: &str| {
+        head.get(k)
+            .map(String::as_str)
+            .ok_or_else(|| fail(path, format!("no {k}")))
+    };
+    let num = |k: &str| -> Result<f64, String> {
+        get(k)?.parse().map_err(|e| fail(path, format!("{k}: {e}")))
+    };
+    let rows = |s: &str| sec.get(s).cloned().unwrap_or_default();
+    let kind = get("EDGE_WEIGHT_TYPE").or_else(|_| get("EDGE_WEIGHT_FORMAT"))?;
+    if kind != "EUC_2D" {
+        return Err(fail(
+            path,
+            format!("edge weight {kind}, only EUC_2D is read"),
+        ));
+    }
+    let n = num("DIMENSION")? as usize;
+    let x = coordinates(path, &rows("NODE_COORD_SECTION"), n)?;
     let id = |t: &Vec<&str>| -> Result<usize, String> {
         match t[0].parse::<usize>() {
             Ok(k) if (1..=n).contains(&k) => Ok(k - 1),
@@ -182,13 +222,7 @@ pub fn read(path: &Path) -> Result<Instance, String> {
             format!("{} stations, {} depots", f.len(), depots.len()),
         ));
     }
-    let mut b = vec![0.0; n];
-    let mut seen = Vec::new();
-    for t in rows("DEMAND_SECTION") {
-        let k = id(&t)?;
-        b[k] = parse(t.get(1).ok_or_else(|| fail(path, "short demand row"))?)?;
-        seen.push(k);
-    }
+    let (b, mut seen) = demands(path, rows("DEMAND_SECTION"), n, id)?;
     let mut p = Instance::new(
         path.file_stem()
             .and_then(|s| s.to_str())
@@ -202,13 +236,7 @@ pub fn read(path: &Path) -> Result<Instance, String> {
         num("ENERGY_CAPACITY")?,
         num("ENERGY_CONSUMPTION")?,
     );
-    let mut want = p.i.clone();
-    want.push(p.o);
-    want.sort_unstable();
-    seen.sort_unstable();
-    if seen != want || p.b[p.o] != 0.0 {
-        return Err(fail(path, "demands do not cover the depot and customers"));
-    }
+    validate_demands(path, &p, &mut seen)?;
     p.published = get("OPTIMAL_VALUE")
         .ok()
         .and_then(|s| s.split_whitespace().next()?.parse().ok())

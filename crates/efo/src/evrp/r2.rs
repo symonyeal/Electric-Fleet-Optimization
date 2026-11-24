@@ -84,7 +84,7 @@ fn graph(p: &Instance, arcs: &[Path]) -> Graph {
 
 /// One out-and-back route per customer: the least l1 + l2 over P_0i x P_i0 whose charge on
 /// arrival at i covers the first leg home.
-fn initial(p: &Instance, arcs: &[Path]) -> Vec<Col> {
+fn initial(p: &Instance, arcs: &[Path], init: &[Vec<usize>]) -> Vec<Col> {
     let mut cols = Vec::new();
     for &i in &p.i {
         let go = arcs.iter().filter(|a| a.i == p.o && a.j == i);
@@ -102,6 +102,15 @@ fn initial(p: &Instance, arcs: &[Path]) -> Vec<Col> {
                 nodes: [&a.nodes[..], &z.nodes[1..]].concat(),
             });
         }
+    }
+    for r in init {
+        let v: Vec<usize> = r.iter().map(|k| k - 1).collect();
+        let cost = v.windows(2).map(|e| p.d[e[0]][e[1]]).sum();
+        cols.push(Col {
+            cost,
+            visits: v.iter().copied().filter(|k| p.i.contains(k)).collect(),
+            nodes: v,
+        });
     }
     cols
 }
@@ -263,6 +272,83 @@ fn restricted(
     )
 }
 
+fn cut_duals(nn: usize, cuts: &[(BTreeSet<usize>, f64)], sigma: &[f64]) -> Option<Vec<f64>> {
+    (!cuts.is_empty()).then(|| {
+        let mut w = vec![0.0; nn * nn];
+        for ((s, _), sg) in cuts.iter().zip(sigma) {
+            for u in (0..nn).filter(|u| !s.contains(u)) {
+                for &v in s {
+                    w[u * nn + v] += sg;
+                }
+            }
+        }
+        w
+    })
+}
+
+/// Convert priced arc paths to unseen route columns in pricing order.
+fn fresh(
+    arcs: &[Path],
+    o: usize,
+    r: &efo_kernels::price::Priced,
+    keys: &HashSet<Vec<usize>>,
+) -> Vec<Col> {
+    let col = |c: &efo_kernels::price::Column| {
+        let a: Vec<&Path> = c.arcs.iter().map(|&e| &arcs[e]).collect();
+        Col {
+            cost: a.iter().map(|a| a.l).sum(),
+            visits: a[..a.len() - 1].iter().map(|a| a.j).collect(),
+            nodes: std::iter::once(o)
+                .chain(a.iter().flat_map(|a| a.nodes[1..].iter().copied()))
+                .collect(),
+        }
+    };
+    r.cols
+        .iter()
+        .map(col)
+        .filter(|c| !keys.contains(&c.nodes))
+        .collect::<Vec<_>>()
+}
+
+/// Run exact pricing only when capped labels find no unseen column.
+fn priced(
+    g: &Graph,
+    arcs: &[Path],
+    o: usize,
+    pi: &[f64],
+    w: Option<&[f64]>,
+    keys: &HashSet<Vec<usize>>,
+    labels: usize,
+    price_time: f64,
+    left: impl Fn() -> f64,
+) -> (Vec<Col>, Option<efo_kernels::price::Priced>) {
+    let heur = g.price(pi, w, Some(labels), left(), 1e-9, 0.0, 1000);
+    let new = fresh(arcs, o, &heur, keys);
+    if new.is_empty() && left() > 0.0 {
+        let r = g.price(pi, w, None, price_time.min(left()), 1e-9, 0.0, 1000);
+        (fresh(arcs, o, &r, keys), Some(r))
+    } else {
+        (new, None)
+    }
+}
+
+/// The Lagrangian lower bound (R2.4), updated only by exact pricing.
+fn bound(
+    p: &Instance,
+    pi: &[f64],
+    cuts: &[(BTreeSet<usize>, f64)],
+    sigma: &[f64],
+    l: f64,
+    r: &efo_kernels::price::Priced,
+) -> f64 {
+    if r.exact {
+        let kappa: f64 = cuts.iter().zip(sigma).map(|((_, k), s)| k * s).sum();
+        l.max(p.i.iter().map(|&i| pi[i]).sum::<f64>() + kappa + p.i.len() as f64 * r.best.min(0.0))
+    } else {
+        l
+    }
+}
+
 /// R2 within time seconds, seeded with the replayed routes init (1-based).
 pub fn r2(p: &Instance, init: &[Vec<usize>], time: f64) -> Record {
     let (eps, add, labels, price_time, max_iter) = (1e-6, 20, 10, 600.0_f64, 1000);
@@ -271,17 +357,7 @@ pub fn r2(p: &Instance, init: &[Vec<usize>], time: f64) -> Record {
     let left = || (time - milp_time - t0.elapsed().as_secs_f64()).max(0.0);
     let arcs = paths(p);
     let g = graph(p, &arcs);
-    let n = p.i.len() as f64;
-    let mut cols = initial(p, &arcs);
-    for r in init {
-        let v: Vec<usize> = r.iter().map(|k| k - 1).collect();
-        let cost = v.windows(2).map(|e| p.d[e[0]][e[1]]).sum();
-        cols.push(Col {
-            cost,
-            visits: v.iter().copied().filter(|k| p.i.contains(k)).collect(),
-            nodes: v,
-        });
-    }
+    let mut cols = initial(p, &arcs, init);
     let mut keys: HashSet<Vec<usize>> = cols.iter().map(|c| c.nodes.clone()).collect();
     let (mut l, mut f, mut cuts) = (f64::NEG_INFINITY, f64::INFINITY, Vec::new());
     let (mut traj, mut calls, mut exact_calls, mut converged) = (Vec::new(), 0, 0, false);
@@ -291,55 +367,23 @@ pub fn r2(p: &Instance, init: &[Vec<usize>], time: f64) -> Record {
         }
         let (fk, pi, lam, sigma) = master(p, &cols, &cuts, left().max(1e-3));
         f = fk;
-        let w: Option<Vec<f64>> = (!cuts.is_empty()).then(|| {
-            let nn = p.x.len();
-            let mut w = vec![0.0; nn * nn];
-            for ((s, _), sg) in cuts.iter().zip(&sigma) {
-                for u in (0..nn).filter(|u| !s.contains(u)) {
-                    for &v in s {
-                        w[u * nn + v] += sg;
-                    }
-                }
-            }
-            w
-        });
-        let col = |c: &efo_kernels::price::Column| {
-            let a: Vec<&Path> = c.arcs.iter().map(|&e| &arcs[e]).collect();
-            Col {
-                cost: a.iter().map(|a| a.l).sum(),
-                visits: a[..a.len() - 1].iter().map(|a| a.j).collect(),
-                nodes: std::iter::once(p.o)
-                    .chain(a.iter().flat_map(|a| a.nodes[1..].iter().copied()))
-                    .collect(),
-            }
-        };
-        let fresh = |r: &efo_kernels::price::Priced, keys: &HashSet<Vec<usize>>| {
-            r.cols
-                .iter()
-                .map(col)
-                .filter(|c| !keys.contains(&c.nodes))
-                .collect::<Vec<_>>()
-        };
-        let heur = g.price(&pi, w.as_deref(), Some(labels), left(), 1e-9, 0.0, 1000);
+        let w = cut_duals(p.x.len(), &cuts, &sigma);
+        let (new, exact_result) = priced(
+            &g,
+            &arcs,
+            p.o,
+            &pi,
+            w.as_deref(),
+            &keys,
+            labels,
+            price_time,
+            left,
+        );
         calls += 1;
-        let mut new = fresh(&heur, &keys);
         let mut exact = false;
-        if new.is_empty() && left() > 0.0 {
-            let r = g.price(
-                &pi,
-                w.as_deref(),
-                None,
-                price_time.min(left()),
-                1e-9,
-                0.0,
-                1000,
-            );
+        if let Some(r) = exact_result {
             (calls, exact_calls, exact) = (calls + 1, exact_calls + 1, r.exact);
-            if exact {
-                let kappa: f64 = cuts.iter().zip(&sigma).map(|((_, k), s)| k * s).sum();
-                l = l.max(p.i.iter().map(|&i| pi[i]).sum::<f64>() + kappa + n * r.best.min(0.0)); // (R2.4)
-            }
-            new = fresh(&r, &keys);
+            l = bound(p, &pi, &cuts, &sigma, l, &r);
         }
         let quiet = new.is_empty();
         for c in new.into_iter().take(add) {

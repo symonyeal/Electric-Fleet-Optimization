@@ -179,30 +179,8 @@ pub fn replay_energy(
         }
         restore += (s0b - e).max(0.0) / ch.eta; // restored overnight, never sold back
     }
-    let (rho, w0, w1) = co.tariff();
-    let mut peak: BTreeMap<&str, f64> = infra.keys().map(|s| (s.as_str(), v.sites[s].l)).collect();
-    for (s, &(_, up)) in infra {
-        let d = &v.sites[s];
-        if d.l > d.g0 + up + tol {
-            bad("grid", format!("{s}: base load {} kW over capacity", d.l));
-        }
-    }
-    for ((s, slot), &(k, kw)) in &use_ {
-        let Some(&(plugs, up)) = infra.get(s) else {
-            continue;
-        };
-        let d = &v.sites[s];
-        if k > plugs {
-            bad("plugs", format!("{s} slot {slot}: {k} > {plugs}"));
-        }
-        if d.l + kw > d.g0 + up + tol {
-            bad("grid", format!("{s} slot {slot}: {} kW", d.l + kw));
-        }
-        if billed(*slot as f64 * dl, w0, w1) {
-            let p = peak.get_mut(s.as_str()).unwrap();
-            *p = p.max(d.l + kw);
-        }
-    }
+    let (rho, _, _) = co.tariff();
+    let peak = meter(v, infra, &use_, &mut defects);
     let nsites = infra.len() as f64;
     let parts = BTreeMap::from([
         ("buses", co.f * duties.len() as f64),
@@ -224,4 +202,41 @@ pub fn replay_energy(
         cost: parts.values().sum(),
         parts,
     }
+}
+
+/// Check site capacities and compute each meter's billed peak, including its base load.
+fn meter<'a>(
+    v: &Transit,
+    infra: &'a Infra,
+    use_: &BTreeMap<(String, i64), (f64, f64)>,
+    defects: &mut Vec<(String, String)>,
+) -> BTreeMap<&'a str, f64> {
+    let mut bad = |k: &str, s: String| defects.push((k.to_owned(), s));
+    let tol = 1e-6;
+    let dl = v.time.delta;
+    let (_, w0, w1) = v.cost.tariff();
+    let mut peak: BTreeMap<&str, f64> = infra.keys().map(|s| (s.as_str(), v.sites[s].l)).collect();
+    for (s, &(_, up)) in infra {
+        let d = &v.sites[s];
+        if d.l > d.g0 + up + tol {
+            bad("grid", format!("{s}: base load {} kW over capacity", d.l));
+        }
+    }
+    for ((s, slot), &(k, kw)) in use_ {
+        let Some(&(plugs, up)) = infra.get(s) else {
+            continue;
+        };
+        let d = &v.sites[s];
+        if k > plugs {
+            bad("plugs", format!("{s} slot {slot}: {k} > {plugs}"));
+        }
+        if d.l + kw > d.g0 + up + tol {
+            bad("grid", format!("{s} slot {slot}: {} kW", d.l + kw));
+        }
+        if billed(*slot as f64 * dl, w0, w1) {
+            let p = peak.get_mut(s.as_str()).unwrap();
+            *p = p.max(d.l + kw);
+        }
+    }
+    peak
 }

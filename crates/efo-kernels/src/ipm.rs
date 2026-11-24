@@ -261,21 +261,8 @@ impl Normal {
     }
 }
 
-/// The method of the module legend on (A, b, c, U), with f0 the objective's constant.
-pub fn ipm(
-    a: &Csc,
-    b: &[f64],
-    c: &[f64],
-    u: &[f64],
-    f0: f64,
-    mut hc: Option<&mut dyn Convex>,
-    o: Opts,
-) -> Out {
-    let t0 = Instant::now();
+fn initial(a: &Csc, u: &[f64], bf: &[bool], hc: &mut Option<&mut dyn Convex>) -> Point {
     let (m, n) = (a.m, a.n);
-    let bf: Vec<bool> = u.iter().map(|x| x.is_finite()).collect();
-    let all = vec![true; n];
-    let nl = hc.is_some();
     let mut s = Point {
         x: (0..n)
             .map(|j| if bf[j] { u[j] / 2.0 } else { 1.0 })
@@ -298,14 +285,168 @@ pub fn ipm(
         s.sl = h.h(&s.x).iter().map(|e| (-e).max(1.0)).collect();
         s.lam = s.sl.iter().map(|e| 1.0 / e).collect();
     }
-    let nb = ((n + bf.iter().filter(|&&f| f).count() + s.sl.len()) as f64).max(1.0);
-    let bmax = amax(b);
-    let cmax = amax(c);
-    let mut status = Status::Limit;
-    let mut err;
-    let mut f: Option<Ldl> = None;
-    let signs: Vec<i8> = (0..n + m).map(|k| if k < n { -1 } else { 1 }).collect();
-    let ne = if nl {
+    s
+}
+
+fn residual(
+    a: &Csc,
+    b: &[f64],
+    c: &[f64],
+    u: &[f64],
+    bf: &[bool],
+    p: &Point,
+    hc: &mut Option<&mut dyn Convex>,
+) -> Resid {
+    let (m, n) = (a.m, a.n);
+    let ax = a.mul(&p.x);
+    let rp: Vec<f64> = (0..m).map(|r| b[r] - ax[r]).collect();
+    let ru: Vec<f64> = (0..n)
+        .map(|j| if bf[j] { u[j] - p.x[j] - p.w[j] } else { 0.0 })
+        .collect();
+    let aty = a.tmul(&p.y);
+    let mut rd: Vec<f64> = (0..n).map(|j| c[j] - aty[j] - p.z[j] + p.v[j]).collect();
+    let (mut rh, mut jf) = (Vec::new(), Trip::default());
+    if let Some(h) = hc.as_deref_mut() {
+        jf = h.jac(&p.x);
+        for (j, e) in jf.tmul(&p.lam, n).into_iter().enumerate() {
+            rd[j] += e;
+        }
+        rh = h.h(&p.x).iter().zip(&p.sl).map(|(e, s)| -e - s).collect();
+    }
+    let mut g = dot(&p.x, &p.z) + dot(&p.sl, &p.lam);
+    for j in 0..n {
+        if bf[j] {
+            g += p.w[j] * p.v[j];
+        }
+    }
+    Resid {
+        rp,
+        ru,
+        rd,
+        rh,
+        g,
+        jf,
+    }
+}
+
+/// Assemble the normal or quasi-definite Newton matrix and convex complementarity target.
+fn system(
+    a: &Csc,
+    s: &Point,
+    r: &Resid,
+    hc: &mut Option<&mut dyn Convex>,
+    ne: Option<&Normal>,
+    dg: &[f64],
+    hi: &[f64],
+    o: Opts,
+    nb: f64,
+) -> (Lower, Vec<f64>) {
+    let (m, n) = (a.m, a.n);
+    // K, lower triangle: -(Hh + Jh'(lam/s)Jh + D + dp I) | A | dd I.
+    let (mut tr, mut tc, mut tv) = (Vec::new(), Vec::new(), Vec::new());
+    let mut put = |i: usize, j: usize, x: f64| {
+        tr.push(i);
+        tc.push(j);
+        tv.push(x);
+    };
+    if ne.is_none() {
+        for j in 0..n {
+            put(j, j, -(dg[j] + o.dp));
+            for e in a.p[j]..a.p[j + 1] {
+                put(n + a.i[e], j, a.v[e]);
+            }
+        }
+        for rr in 0..m {
+            put(n + rr, n + rr, o.dd);
+        }
+    }
+    let mut rsl = Vec::new();
+    if let Some(h) = hc.as_deref_mut() {
+        let hh = h.hess(&s.x, &s.lam);
+        for e in 0..hh.v.len() {
+            if hh.r[e] >= hh.c[e] {
+                put(hh.r[e], hh.c[e], -hh.v[e]);
+            }
+        }
+        let mut rows: Vec<Vec<(usize, f64)>> = vec![Vec::new(); s.sl.len()];
+        for e in 0..r.jf.v.len() {
+            rows[r.jf.r[e]].push((r.jf.c[e], r.jf.v[e]));
+        }
+        for (kk, row) in rows.iter().enumerate() {
+            let wgt = s.lam[kk] / s.sl[kk];
+            for &(ca, va) in row {
+                for &(cb, vb) in row {
+                    if ca >= cb {
+                        put(ca, cb, -wgt * va * vb);
+                    }
+                }
+            }
+        }
+        rsl = (0..s.sl.len())
+            .map(|kk| o.sigma * r.g / nb - s.sl[kk] * s.lam[kk])
+            .collect();
+    }
+    let kmat = match &ne {
+        Some(ne) => ne.matrix(a, hi, o.dd),
+        None => Lower::from_triplets(n + m, &tr, &tc, &tv),
+    };
+    (kmat, rsl)
+}
+
+/// Recover primal and dual directions from the complementarity targets.
+fn direction(
+    a: &Csc,
+    s: &Point,
+    r: &Resid,
+    bf: &[bool],
+    wi: &[f64],
+    hi: &[f64],
+    rsl: &[f64],
+    nl: bool,
+    normal: bool,
+    fac: &Ldl,
+    rxz: &[f64],
+    rwv: &[f64],
+) -> (Vec<f64>, Vec<f64>, Vec<f64>, Vec<f64>, Vec<f64>) {
+    let (m, n) = (a.m, a.n);
+    let mut rhs: Vec<f64> = (0..n)
+        .map(|j| r.rd[j] - rxz[j] / s.x[j] + wi[j] * (rwv[j] - s.v[j] * r.ru[j]))
+        .collect();
+    if nl {
+        let e: Vec<f64> = (0..s.sl.len())
+            .map(|kk| (rsl[kk] - s.lam[kk] * r.rh[kk]) / s.sl[kk])
+            .collect();
+        for (j, x) in r.jf.tmul(&e, n).into_iter().enumerate() {
+            rhs[j] += x;
+        }
+    }
+    let (dx, dy) = if normal {
+        let ahr = a.mul(&(0..n).map(|j| hi[j] * rhs[j]).collect::<Vec<_>>());
+        let dy = fac.solve(&(0..m).map(|i| r.rp[i] + ahr[i]).collect::<Vec<_>>());
+        let aty = a.tmul(&dy);
+        (
+            (0..n)
+                .map(|j| hi[j] * (aty[j] - rhs[j]))
+                .collect::<Vec<_>>(),
+            dy,
+        )
+    } else {
+        rhs.extend_from_slice(&r.rp);
+        let d = fac.solve(&rhs);
+        (d[..n].to_vec(), d[n..].to_vec())
+    };
+    let dz: Vec<f64> = (0..n).map(|j| (rxz[j] - s.z[j] * dx[j]) / s.x[j]).collect();
+    let dw: Vec<f64> = (0..n)
+        .map(|j| if bf[j] { r.ru[j] - dx[j] } else { 0.0 })
+        .collect();
+    let dv: Vec<f64> = (0..n).map(|j| wi[j] * (rwv[j] - s.v[j] * dw[j])).collect();
+    (dx, dy, dz, dw, dv)
+}
+
+/// Choose normal equations only for a linear problem whose factor is sparse enough.
+fn normal(a: &Csc, nl: bool) -> Option<Normal> {
+    let (m, n) = (a.m, a.n);
+    if nl {
         None
     } else {
         Normal::new(a).filter(|ne| {
@@ -322,59 +463,81 @@ pub fn ipm(
             let k = Lower::from_triplets(n + m, &r, &c, &vec![1.0; r.len()]);
             factor_nnz(&ne.pattern) <= NE_FILL * factor_nnz(&k)
         })
-    };
-    let ne_signs = vec![1i8; m];
+    }
+}
 
-    let resid = |p: &Point, hc: &mut Option<&mut dyn Convex>| -> Resid {
-        let ax = a.mul(&p.x);
-        let rp: Vec<f64> = (0..m).map(|r| b[r] - ax[r]).collect();
-        let ru: Vec<f64> = (0..n)
-            .map(|j| if bf[j] { u[j] - p.x[j] - p.w[j] } else { 0.0 })
-            .collect();
-        let aty = a.tmul(&p.y);
-        let mut rd: Vec<f64> = (0..n).map(|j| c[j] - aty[j] - p.z[j] + p.v[j]).collect();
-        let (mut rh, mut jf) = (Vec::new(), Trip::default());
-        if let Some(h) = hc.as_deref_mut() {
-            jf = h.jac(&p.x);
-            for (j, e) in jf.tmul(&p.lam, n).into_iter().enumerate() {
-                rd[j] += e;
-            }
-            rh = h.h(&p.x).iter().zip(&p.sl).map(|(e, s)| -e - s).collect();
+/// Scaled primal, dual and complementarity errors of stopping rule A2.
+fn errors(
+    s: &Point,
+    r: &Resid,
+    c: &[f64],
+    u: &[f64],
+    bf: &[bool],
+    f0: f64,
+    bmax: f64,
+    cmax: f64,
+) -> [f64; 3] {
+    let n = s.x.len();
+    let pobj = f0 + dot(c, &s.x);
+    let mut eu: f64 = 0.0;
+    for j in 0..n {
+        if bf[j] {
+            eu = eu.max(r.ru[j].abs() / (1.0 + u[j]));
         }
-        let mut g = dot(&p.x, &p.z) + dot(&p.sl, &p.lam);
-        for j in 0..n {
-            if bf[j] {
-                g += p.w[j] * p.v[j];
-            }
+    }
+    let xsum: f64 = s.x.iter().map(|x| x.abs()).sum();
+    [
+        (amax(&r.rp) / (1.0 + bmax))
+            .max(eu)
+            .max(amax(&r.rh) / (1.0 + amax(&s.sl))),
+        amax(&r.rd) * (1.0 / (1.0 + cmax)).max(xsum / (1.0 + pobj.abs())),
+        r.g / (1.0 + pobj.abs()),
+    ]
+}
+
+fn factor(f: &mut Option<Ldl>, kmat: Lower, normal: bool, ne_signs: &[i8], signs: &[i8]) -> bool {
+    match f.as_mut() {
+        Some(f) => f.factor(kmat),
+        None => {
+            *f = match normal {
+                true => Ldl::new(kmat, ne_signs.to_vec(), 1e-30, 1e128),
+                false => Ldl::new(kmat, signs.to_vec(), 1e-13, 1e-8),
+            };
+            f.is_some()
         }
-        Resid {
-            rp,
-            ru,
-            rd,
-            rh,
-            g,
-            jf,
-        }
-    };
+    }
+}
+
+/// The method of the module legend on (A, b, c, U), with f0 the objective's constant.
+pub fn ipm(
+    a: &Csc,
+    b: &[f64],
+    c: &[f64],
+    u: &[f64],
+    f0: f64,
+    mut hc: Option<&mut dyn Convex>,
+    o: Opts,
+) -> Out {
+    let t0 = Instant::now();
+    let (m, n) = (a.m, a.n);
+    let bf: Vec<bool> = u.iter().map(|x| x.is_finite()).collect();
+    let all = vec![true; n];
+    let nl = hc.is_some();
+    let mut s = initial(a, u, &bf, &mut hc);
+    let nb = ((n + bf.iter().filter(|&&f| f).count() + s.sl.len()) as f64).max(1.0);
+    let bmax = amax(b);
+    let cmax = amax(c);
+    let mut status = Status::Limit;
+    let mut err;
+    let mut f: Option<Ldl> = None;
+    let signs: Vec<i8> = (0..n + m).map(|k| if k < n { -1 } else { 1 }).collect();
+    let ne = normal(a, nl);
+    let ne_signs = vec![1i8; m];
 
     let mut k = 0;
     loop {
-        let r = resid(&s, &mut hc);
-        let pobj = f0 + dot(c, &s.x);
-        let mut eu: f64 = 0.0;
-        for j in 0..n {
-            if bf[j] {
-                eu = eu.max(r.ru[j].abs() / (1.0 + u[j]));
-            }
-        }
-        let xsum: f64 = s.x.iter().map(|x| x.abs()).sum();
-        err = [
-            (amax(&r.rp) / (1.0 + bmax))
-                .max(eu)
-                .max(amax(&r.rh) / (1.0 + amax(&s.sl))),
-            amax(&r.rd) * (1.0 / (1.0 + cmax)).max(xsum / (1.0 + pobj.abs())),
-            r.g / (1.0 + pobj.abs()),
-        ];
+        let r = residual(a, b, c, u, &bf, &s, &mut hc);
+        err = errors(&s, &r, c, u, &bf, f0, bmax, cmax);
         if err.iter().all(|&e| e <= o.eps) {
             status = Status::Optimal;
             break;
@@ -392,64 +555,8 @@ pub fn ipm(
         let dg: Vec<f64> = (0..n).map(|j| s.z[j] / s.x[j] + wi[j] * s.v[j]).collect();
 
         let hi: Vec<f64> = dg.iter().map(|d| 1.0 / (d + o.dp)).collect();
-        // K, lower triangle: -(Hh + Jh'(lam/s)Jh + D + dp I) | A | dd I.
-        let (mut tr, mut tc, mut tv) = (Vec::new(), Vec::new(), Vec::new());
-        let mut put = |i: usize, j: usize, x: f64| {
-            tr.push(i);
-            tc.push(j);
-            tv.push(x);
-        };
-        if ne.is_none() {
-            for j in 0..n {
-                put(j, j, -(dg[j] + o.dp));
-                for e in a.p[j]..a.p[j + 1] {
-                    put(n + a.i[e], j, a.v[e]);
-                }
-            }
-            for rr in 0..m {
-                put(n + rr, n + rr, o.dd);
-            }
-        }
-        let mut rsl = Vec::new();
-        if let Some(h) = hc.as_deref_mut() {
-            let hh = h.hess(&s.x, &s.lam);
-            for e in 0..hh.v.len() {
-                if hh.r[e] >= hh.c[e] {
-                    put(hh.r[e], hh.c[e], -hh.v[e]);
-                }
-            }
-            let mut rows: Vec<Vec<(usize, f64)>> = vec![Vec::new(); s.sl.len()];
-            for e in 0..r.jf.v.len() {
-                rows[r.jf.r[e]].push((r.jf.c[e], r.jf.v[e]));
-            }
-            for (kk, row) in rows.iter().enumerate() {
-                let wgt = s.lam[kk] / s.sl[kk];
-                for &(ca, va) in row {
-                    for &(cb, vb) in row {
-                        if ca >= cb {
-                            put(ca, cb, -wgt * va * vb);
-                        }
-                    }
-                }
-            }
-            rsl = (0..s.sl.len())
-                .map(|kk| o.sigma * r.g / nb - s.sl[kk] * s.lam[kk])
-                .collect();
-        }
-        let kmat = match &ne {
-            Some(ne) => ne.matrix(a, &hi, o.dd),
-            None => Lower::from_triplets(n + m, &tr, &tc, &tv),
-        };
-        let ok = match f.as_mut() {
-            Some(f) => f.factor(kmat),
-            None => {
-                f = match ne {
-                    Some(_) => Ldl::new(kmat, ne_signs.clone(), 1e-30, 1e128),
-                    None => Ldl::new(kmat, signs.clone(), 1e-13, 1e-8),
-                };
-                f.is_some()
-            }
-        };
+        let (kmat, rsl) = system(a, &s, &r, &mut hc, ne.as_ref(), &dg, &hi, o, nb);
+        let ok = factor(&mut f, kmat, ne.is_some(), &ne_signs, &signs);
         if !ok {
             status = Status::Numerical;
             break;
@@ -457,46 +564,25 @@ pub fn ipm(
         let fac = f.as_ref().unwrap();
 
         // The direction for the complementarity targets rxz = mu e - XZe, rwv = mu e - WVe.
-        let direction = |rxz: &[f64], rwv: &[f64]| {
-            let mut rhs: Vec<f64> = (0..n)
-                .map(|j| r.rd[j] - rxz[j] / s.x[j] + wi[j] * (rwv[j] - s.v[j] * r.ru[j]))
-                .collect();
-            if nl {
-                let e: Vec<f64> = (0..s.sl.len())
-                    .map(|kk| (rsl[kk] - s.lam[kk] * r.rh[kk]) / s.sl[kk])
-                    .collect();
-                for (j, x) in r.jf.tmul(&e, n).into_iter().enumerate() {
-                    rhs[j] += x;
-                }
-            }
-            let (dx, dy) = if ne.is_some() {
-                let ahr = a.mul(&(0..n).map(|j| hi[j] * rhs[j]).collect::<Vec<_>>());
-                let dy = fac.solve(&(0..m).map(|i| r.rp[i] + ahr[i]).collect::<Vec<_>>());
-                let aty = a.tmul(&dy);
-                (
-                    (0..n)
-                        .map(|j| hi[j] * (aty[j] - rhs[j]))
-                        .collect::<Vec<_>>(),
-                    dy,
-                )
-            } else {
-                rhs.extend_from_slice(&r.rp);
-                let d = fac.solve(&rhs);
-                (d[..n].to_vec(), d[n..].to_vec())
-            };
-            let dz: Vec<f64> = (0..n).map(|j| (rxz[j] - s.z[j] * dx[j]) / s.x[j]).collect();
-            let dw: Vec<f64> = (0..n)
-                .map(|j| if bf[j] { r.ru[j] - dx[j] } else { 0.0 })
-                .collect();
-            let dv: Vec<f64> = (0..n).map(|j| wi[j] * (rwv[j] - s.v[j] * dw[j])).collect();
-            (dx, dy, dz, dw, dv)
-        };
         let mu = o.sigma * r.g / nb;
         let rxz: Vec<f64> = (0..n).map(|j| mu - s.x[j] * s.z[j]).collect();
         let rwv: Vec<f64> = (0..n)
             .map(|j| if bf[j] { mu - s.w[j] * s.v[j] } else { 0.0 })
             .collect();
-        let (dx, dy, dz, dw, dv) = direction(&rxz, &rwv);
+        let (dx, dy, dz, dw, dv) = direction(
+            a,
+            &s,
+            &r,
+            &bf,
+            &wi,
+            &hi,
+            &rsl,
+            nl,
+            ne.is_some(),
+            fac,
+            &rxz,
+            &rwv,
+        );
         let mut tp = step(&s.x, &dx, &all, o.eta).min(step(&s.w, &dw, &bf, o.eta));
         let mut td = step(&s.z, &dz, &all, o.eta).min(step(&s.v, &dv, &bf, o.eta));
         let (mut ds, mut dl) = (Vec::new(), Vec::new());
@@ -532,7 +618,7 @@ pub fn ipm(
             // Backtrack on the residual merit.
             let m0 = r.merit();
             while tp > 1e-12 {
-                if resid(&next, &mut hc).merit() <= (1.0 - 1e-4 * tp) * m0 {
+                if residual(a, b, c, u, &bf, &next, &mut hc).merit() <= (1.0 - 1e-4 * tp) * m0 {
                     break;
                 }
                 tp /= 2.0;

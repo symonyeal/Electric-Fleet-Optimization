@@ -21,6 +21,26 @@ fn value<T: std::str::FromStr>(flag: &str, v: Option<&String>) -> Result<T, Stri
         .map_err(|_| format!("{flag}: not a valid value"))
 }
 
+fn option(
+    c: &mut Case,
+    out: &mut Option<PathBuf>,
+    flag: &str,
+    v: Option<&String>,
+) -> Result<(), String> {
+    let track = c.track.as_str();
+    match (flag, track) {
+        ("--time", _) => c.time = value(flag, v)?,
+        ("--alpha", _) => c.alpha = Some(value(flag, v)?),
+        ("--out", _) => *out = Some(PathBuf::from(value::<String>(flag, v)?)),
+        ("--far", "evrp") => c.far = Some(value(flag, v)?),
+        ("--until", "transit") => c.until = Some(value(flag, v)?),
+        ("--scenario", "transit") => c.scenario = Some(value(flag, v)?),
+        ("--battery", "transit") => c.battery = Some(value(flag, v)?),
+        _ => return Err(format!("{flag} does not apply to track {track}\n\n{USAGE}")),
+    }
+    Ok(())
+}
+
 fn case(args: &[String]) -> Result<(Case, Option<PathBuf>, bool), String> {
     let [track, instance, model, rest @ ..] = args else {
         return Err(USAGE.into());
@@ -43,16 +63,7 @@ fn case(args: &[String]) -> Result<(Case, Option<PathBuf>, bool), String> {
     let mut it = rest.iter().filter(|a| *a != "--replace" && *a != "--cover");
     while let Some(flag) = it.next() {
         let v = it.next();
-        match (flag.as_str(), track.as_str()) {
-            ("--time", _) => c.time = value(flag, v)?,
-            ("--alpha", _) => c.alpha = Some(value(flag, v)?),
-            ("--out", _) => out = Some(PathBuf::from(value::<String>(flag, v)?)),
-            ("--far", "evrp") => c.far = Some(value(flag, v)?),
-            ("--until", "transit") => c.until = Some(value(flag, v)?),
-            ("--scenario", "transit") => c.scenario = Some(value(flag, v)?),
-            ("--battery", "transit") => c.battery = Some(value(flag, v)?),
-            _ => return Err(format!("{flag} does not apply to track {track}\n\n{USAGE}")),
-        }
+        option(&mut c, &mut out, flag, v)?;
     }
     if !(c.time > 0.0 && c.time.is_finite()) {
         return Err("--time must be positive".into());
@@ -65,6 +76,54 @@ fn case(args: &[String]) -> Result<(Case, Option<PathBuf>, bool), String> {
     }
     efo::scenario::overrides(c.alpha, c.battery)?;
     Ok((c, out, replace))
+}
+
+fn execute(root: &Path, args: &[String]) -> Result<(), String> {
+    let (c, out, replace) = case(&args[1..])?;
+    let code = bundle::code(root)?;
+    let dir = out.unwrap_or_else(|| root.join("docs/results").join(&c.track));
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    if code.dirty && out_is_results(&dir) {
+        return Err("refusing to write a result from uncommitted code into docs/results: commit first, or pass --out".into());
+    }
+    let f = dir.join(format!("{}.json", c.stem()));
+    let exists = f.try_exists().map_err(|e| e.to_string())?;
+    if exists && !replace {
+        return Err(format!(
+            "{} already exists; use --replace or a fresh --out DIR",
+            f.display()
+        ));
+    }
+    let (record, inputs) = run::run(root, &c)?;
+    println!(
+        "{} {}: status={} U={:?} L={:?} gap={:?} {:.1} s",
+        record.instance,
+        record.model,
+        record.status,
+        record.u,
+        record.l,
+        record.gap_rel,
+        record.elapsed
+    );
+    let b = Bundle {
+        record,
+        case: c.clone(),
+        code,
+        host: bundle::host(),
+        inputs,
+        command: args[1..].to_vec(),
+    };
+    let old = if exists {
+        Some(archive(&dir, &f)?)
+    } else {
+        None
+    };
+    bundle::write_new(&f, &b).inspect_err(|_| {
+        if let Some(old) = &old {
+            let _ = std::fs::rename(old, &f);
+        }
+    })?;
+    Ok(())
 }
 
 fn main_() -> Result<(), String> {
@@ -102,53 +161,7 @@ fn main_() -> Result<(), String> {
             );
             Ok(())
         }
-        Some("evrp" | "transit") => {
-            let (c, out, replace) = case(&args[1..])?;
-            let code = bundle::code(root)?;
-            let dir = out.unwrap_or_else(|| root.join("docs/results").join(&c.track));
-            std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-            if code.dirty && out_is_results(&dir) {
-                return Err("refusing to write a result from uncommitted code into docs/results: commit first, or pass --out".into());
-            }
-            let f = dir.join(format!("{}.json", c.stem()));
-            let exists = f.try_exists().map_err(|e| e.to_string())?;
-            if exists && !replace {
-                return Err(format!(
-                    "{} already exists; use --replace or a fresh --out DIR",
-                    f.display()
-                ));
-            }
-            let (record, inputs) = run::run(root, &c)?;
-            println!(
-                "{} {}: status={} U={:?} L={:?} gap={:?} {:.1} s",
-                record.instance,
-                record.model,
-                record.status,
-                record.u,
-                record.l,
-                record.gap_rel,
-                record.elapsed
-            );
-            let b = Bundle {
-                record,
-                case: c.clone(),
-                code,
-                host: bundle::host(),
-                inputs,
-                command: args[1..].to_vec(),
-            };
-            let old = if exists {
-                Some(archive(&dir, &f)?)
-            } else {
-                None
-            };
-            bundle::write_new(&f, &b).inspect_err(|_| {
-                if let Some(old) = &old {
-                    let _ = std::fs::rename(old, &f);
-                }
-            })?;
-            Ok(())
-        }
+        Some("evrp" | "transit") => execute(root, &args),
         _ => Err(USAGE.into()),
     }
 }

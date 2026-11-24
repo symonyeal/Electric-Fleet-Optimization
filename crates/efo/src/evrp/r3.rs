@@ -47,15 +47,8 @@ struct Model {
     g: usize,
 }
 
-fn rows(p: &Instance, sc: &Recharge) -> Model {
-    let (o, n, h, big_q) = (p.o, p.i.len(), p.h, p.q);
-    let (v, sig, t_max, tmin, pw) = (
-        sc.time.speed,
-        sc.time.service,
-        sc.time.t,
-        sc.time.tau_min,
-        sc.charger.p,
-    );
+fn arcs(p: &Instance) -> Vec<(usize, Option<usize>, usize)> {
+    let (o, h, big_q) = (p.o, p.h, p.q);
     let reach = |a: usize, b: usize| h * p.d[a][b] <= big_q + 1e-9;
     let mut arcs = Vec::new();
     for i in std::iter::once(o).chain(p.i.iter().copied()) {
@@ -73,37 +66,20 @@ fn rows(p: &Instance, sc: &Recharge) -> Model {
             );
         }
     }
-    let s: Vec<usize> = (0..arcs.len()).filter(|&k| arcs[k].1.is_some()).collect();
-    let at: BTreeMap<usize, usize> = s.iter().enumerate().map(|(k, &a)| (a, k)).collect();
-    let ci: BTreeMap<usize, usize> = p.i.iter().enumerate().map(|(k, &i)| (i, k)).collect();
-    let length = |a: &(usize, Option<usize>, usize)| match a.1 {
-        None => p.d[a.0][a.2],
-        Some(f) => p.d[a.0][f] + p.d[f][a.2],
-    };
-    let mut m = Lp::default();
-    for a in &arcs {
-        m.var(sc.cost.distance * length(a), 0.0, 1.0, true);
-    }
-    let u = m.n();
-    for &i in &p.i {
-        m.var(0.0, p.b[i], p.cap, false);
-    }
-    let y = m.vars(n, 0.0, 0.0, big_q, false);
-    let tt = m.vars(n, 0.0, 0.0, t_max, false);
-    let q = m.vars(s.len(), 0.0, 0.0, big_q, false);
-    let tau = m.vars(s.len(), sc.cost.dwell, 0.0, t_max, false);
-    let gmax = big_q / sc.charger.eta + sc.charger.alpha * big_q * big_q / tmin; // most a visit draws
-    let g = m.vars(s.len(), sc.cost.energy, 0.0, gmax, false);
-    let (mut out, mut inn, mut pair) = (
-        BTreeMap::<usize, Vec<usize>>::new(),
-        BTreeMap::<usize, Vec<usize>>::new(),
-        BTreeMap::<(usize, usize), Vec<usize>>::new(),
-    );
-    for (k, &(i, _, j)) in arcs.iter().enumerate() {
-        out.entry(i).or_default().push(k);
-        inn.entry(j).or_default().push(k);
-        pair.entry((i, j)).or_default().push(k);
-    }
+    arcs
+}
+
+/// Degree, fleet-capacity and lifted MTZ rows (R1.2)-(R1.3).
+fn capacity_rows(
+    m: &mut Lp,
+    p: &Instance,
+    out: &BTreeMap<usize, Vec<usize>>,
+    inn: &BTreeMap<usize, Vec<usize>>,
+    pair: &BTreeMap<(usize, usize), Vec<usize>>,
+    u: usize,
+    ci: &BTreeMap<usize, usize>,
+) {
+    let o = p.o;
     let ones = |ks: Option<&Vec<usize>>| {
         ks.into_iter()
             .flatten()
@@ -138,6 +114,50 @@ fn rows(p: &Instance, sc: &Recharge) -> Model {
             }
         }
     }
+}
+
+fn rows(p: &Instance, sc: &Recharge) -> Model {
+    let (o, n, h, big_q) = (p.o, p.i.len(), p.h, p.q);
+    let (v, sig, t_max, tmin, pw) = (
+        sc.time.speed,
+        sc.time.service,
+        sc.time.t,
+        sc.time.tau_min,
+        sc.charger.p,
+    );
+    let arcs = arcs(p);
+    let s: Vec<usize> = (0..arcs.len()).filter(|&k| arcs[k].1.is_some()).collect();
+    let at: BTreeMap<usize, usize> = s.iter().enumerate().map(|(k, &a)| (a, k)).collect();
+    let ci: BTreeMap<usize, usize> = p.i.iter().enumerate().map(|(k, &i)| (i, k)).collect();
+    let length = |a: &(usize, Option<usize>, usize)| match a.1 {
+        None => p.d[a.0][a.2],
+        Some(f) => p.d[a.0][f] + p.d[f][a.2],
+    };
+    let mut m = Lp::default();
+    for a in &arcs {
+        m.var(sc.cost.distance * length(a), 0.0, 1.0, true);
+    }
+    let u = m.n();
+    for &i in &p.i {
+        m.var(0.0, p.b[i], p.cap, false);
+    }
+    let y = m.vars(n, 0.0, 0.0, big_q, false);
+    let tt = m.vars(n, 0.0, 0.0, t_max, false);
+    let q = m.vars(s.len(), 0.0, 0.0, big_q, false);
+    let tau = m.vars(s.len(), sc.cost.dwell, 0.0, t_max, false);
+    let gmax = big_q / sc.charger.eta + sc.charger.alpha * big_q * big_q / tmin; // most a visit draws
+    let g = m.vars(s.len(), sc.cost.energy, 0.0, gmax, false);
+    let (mut out, mut inn, mut pair) = (
+        BTreeMap::<usize, Vec<usize>>::new(),
+        BTreeMap::<usize, Vec<usize>>::new(),
+        BTreeMap::<(usize, usize), Vec<usize>>::new(),
+    );
+    for (k, &(i, _, j)) in arcs.iter().enumerate() {
+        out.entry(i).or_default().push(k);
+        inn.entry(j).or_default().push(k);
+        pair.entry((i, j)).or_default().push(k);
+    }
+    capacity_rows(&mut m, p, &out, &inn, &pair, u, &ci);
     let first = |a: &(usize, Option<usize>, usize)| h * p.d[a.0][a.1.unwrap_or(a.2)];
     for &i in &p.i {
         let mut a = vec![(y + ci[&i], 1.0)]; // (R1.4)
