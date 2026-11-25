@@ -69,108 +69,162 @@ fn arcs(p: &Instance) -> Vec<(usize, Option<usize>, usize)> {
     arcs
 }
 
-/// Degree, fleet-capacity and lifted MTZ rows (R1.2)-(R1.3).
-fn capacity_rows(
-    m: &mut Lp,
-    p: &Instance,
-    out: &BTreeMap<usize, Vec<usize>>,
-    inn: &BTreeMap<usize, Vec<usize>>,
-    pair: &BTreeMap<(usize, usize), Vec<usize>>,
-    u: usize,
-    ci: &BTreeMap<usize, usize>,
-) {
-    let o = p.o;
-    let ones = |ks: Option<&Vec<usize>>| {
-        ks.into_iter()
-            .flatten()
-            .map(|&k| (k, 1.0))
-            .collect::<Vec<_>>()
-    };
-    for &i in &p.i {
-        m.eq(ones(out.get(&i)), 1.0);
-        m.eq(ones(inn.get(&i)), 1.0);
-    }
-    m.ge(
-        ones(out.get(&o)),
-        (p.i.iter().map(|&i| p.b[i]).sum::<f64>() / p.cap - 1e-9).ceil(),
-    );
-    for &i in &p.i {
-        for &j in &p.i {
-            if i != j {
-                let mut a = vec![(u + ci[&j], 1.0), (u + ci[&i], -1.0)];
-                a.extend(
-                    pair.get(&(i, j))
-                        .into_iter()
-                        .flatten()
-                        .map(|&k| (k, -p.cap)),
-                );
-                a.extend(
-                    pair.get(&(j, i))
-                        .into_iter()
-                        .flatten()
-                        .map(|&k| (k, -(p.cap - p.b[i] - p.b[j]))),
-                );
-                m.ge(a, p.b[j] - p.cap);
-            }
-        }
+/// Length of an arc (i, station, j).
+fn length(p: &Instance, a: &(usize, Option<usize>, usize)) -> f64 {
+    match a.1 {
+        None => p.d[a.0][a.2],
+        Some(f) => p.d[a.0][f] + p.d[f][a.2],
     }
 }
 
-fn rows(p: &Instance, sc: &Recharge) -> Model {
-    let (o, n, h, big_q) = (p.o, p.i.len(), p.h, p.q);
-    let (v, sig, t_max, tmin, pw) = (
-        sc.time.speed,
-        sc.time.service,
-        sc.time.t,
-        sc.time.tau_min,
-        sc.charger.p,
-    );
-    let arcs = arcs(p);
-    let s: Vec<usize> = (0..arcs.len()).filter(|&k| arcs[k].1.is_some()).collect();
-    let at: BTreeMap<usize, usize> = s.iter().enumerate().map(|(k, &a)| (a, k)).collect();
-    let ci: BTreeMap<usize, usize> = p.i.iter().enumerate().map(|(k, &i)| (i, k)).collect();
-    let length = |a: &(usize, Option<usize>, usize)| match a.1 {
-        None => p.d[a.0][a.2],
-        Some(f) => p.d[a.0][f] + p.d[f][a.2],
-    };
-    let mut m = Lp::default();
-    for a in &arcs {
-        m.var(sc.cost.distance * length(a), 0.0, 1.0, true);
-    }
-    let u = m.n();
-    for &i in &p.i {
-        m.var(0.0, p.b[i], p.cap, false);
-    }
-    let y = m.vars(n, 0.0, 0.0, big_q, false);
-    let tt = m.vars(n, 0.0, 0.0, t_max, false);
-    let q = m.vars(s.len(), 0.0, 0.0, big_q, false);
-    let tau = m.vars(s.len(), sc.cost.dwell, 0.0, t_max, false);
-    let gmax = big_q / sc.charger.eta + sc.charger.alpha * big_q * big_q / tmin; // most a visit draws
-    let g = m.vars(s.len(), sc.cost.energy, 0.0, gmax, false);
-    let (mut out, mut inn, mut pair) = (
-        BTreeMap::<usize, Vec<usize>>::new(),
-        BTreeMap::<usize, Vec<usize>>::new(),
-        BTreeMap::<(usize, usize), Vec<usize>>::new(),
-    );
-    for (k, &(i, _, j)) in arcs.iter().enumerate() {
-        out.entry(i).or_default().push(k);
-        inn.entry(j).or_default().push(k);
-        pair.entry((i, j)).or_default().push(k);
-    }
-    capacity_rows(&mut m, p, &out, &inn, &pair, u, &ci);
-    let first = |a: &(usize, Option<usize>, usize)| h * p.d[a.0][a.1.unwrap_or(a.2)];
-    for &i in &p.i {
-        let mut a = vec![(y + ci[&i], 1.0)]; // (R1.4)
-        a.extend(
-            out.get(&i)
-                .into_iter()
-                .flatten()
-                .map(|&k| (k, -first(&arcs[k]))),
+/// The R3 program under construction: its columns, and the arc indices the row blocks read, by
+/// tail i (out), head j (inn) and pair (i, j); at the position of a station arc among s, ci the
+/// position of a customer among I.
+struct Builder<'a> {
+    p: &'a Instance,
+    sc: &'a Recharge,
+    lp: Lp,
+    arcs: Vec<(usize, Option<usize>, usize)>,
+    s: Vec<usize>,
+    at: BTreeMap<usize, usize>,
+    ci: BTreeMap<usize, usize>,
+    out: BTreeMap<usize, Vec<usize>>,
+    inn: BTreeMap<usize, Vec<usize>>,
+    pair: BTreeMap<(usize, usize), Vec<usize>>,
+    u: usize,
+    y: usize,
+    tt: usize,
+    q: usize,
+    tau: usize,
+    g: usize,
+}
+
+impl<'a> Builder<'a> {
+    /// The arcs, their indices and every column of the program, without rows.
+    fn new(p: &'a Instance, sc: &'a Recharge) -> Builder<'a> {
+        let (n, big_q) = (p.i.len(), p.q);
+        let (t_max, tmin) = (sc.time.t, sc.time.tau_min);
+        let arcs = arcs(p);
+        let s: Vec<usize> = (0..arcs.len()).filter(|&k| arcs[k].1.is_some()).collect();
+        let at: BTreeMap<usize, usize> = s.iter().enumerate().map(|(k, &a)| (a, k)).collect();
+        let ci: BTreeMap<usize, usize> = p.i.iter().enumerate().map(|(k, &i)| (i, k)).collect();
+        let mut lp = Lp::default();
+        for a in &arcs {
+            lp.var(sc.cost.distance * length(p, a), 0.0, 1.0, true);
+        }
+        let u = lp.n();
+        for &i in &p.i {
+            lp.var(0.0, p.b[i], p.cap, false);
+        }
+        let y = lp.vars(n, 0.0, 0.0, big_q, false);
+        let tt = lp.vars(n, 0.0, 0.0, t_max, false);
+        let q = lp.vars(s.len(), 0.0, 0.0, big_q, false);
+        let tau = lp.vars(s.len(), sc.cost.dwell, 0.0, t_max, false);
+        let gmax = big_q / sc.charger.eta + sc.charger.alpha * big_q * big_q / tmin; // most a visit draws
+        let g = lp.vars(s.len(), sc.cost.energy, 0.0, gmax, false);
+        let (mut out, mut inn, mut pair) = (
+            BTreeMap::<usize, Vec<usize>>::new(),
+            BTreeMap::<usize, Vec<usize>>::new(),
+            BTreeMap::<(usize, usize), Vec<usize>>::new(),
         );
-        m.ge(a, 0.0);
+        for (k, &(i, _, j)) in arcs.iter().enumerate() {
+            out.entry(i).or_default().push(k);
+            inn.entry(j).or_default().push(k);
+            pair.entry((i, j)).or_default().push(k);
+        }
+        Builder {
+            p,
+            sc,
+            lp,
+            arcs,
+            s,
+            at,
+            ci,
+            out,
+            inn,
+            pair,
+            u,
+            y,
+            tt,
+            q,
+            tau,
+            g,
+        }
     }
-    for (k, &(i, f, j)) in arcs.iter().enumerate() {
-        let tr = length(&arcs[k]) / v;
+
+    /// Degree, fleet-capacity and lifted MTZ rows (R1.2)-(R1.3).
+    fn capacity_rows(&mut self) {
+        let (p, u) = (self.p, self.u);
+        let (m, out, inn, pair, ci) = (&mut self.lp, &self.out, &self.inn, &self.pair, &self.ci);
+        let o = p.o;
+        let ones = |ks: Option<&Vec<usize>>| {
+            ks.into_iter()
+                .flatten()
+                .map(|&k| (k, 1.0))
+                .collect::<Vec<_>>()
+        };
+        for &i in &p.i {
+            m.eq(ones(out.get(&i)), 1.0);
+            m.eq(ones(inn.get(&i)), 1.0);
+        }
+        m.ge(
+            ones(out.get(&o)),
+            (p.i.iter().map(|&i| p.b[i]).sum::<f64>() / p.cap - 1e-9).ceil(),
+        );
+        for &i in &p.i {
+            for &j in &p.i {
+                if i != j {
+                    let mut a = vec![(u + ci[&j], 1.0), (u + ci[&i], -1.0)];
+                    a.extend(
+                        pair.get(&(i, j))
+                            .into_iter()
+                            .flatten()
+                            .map(|&k| (k, -p.cap)),
+                    );
+                    a.extend(
+                        pair.get(&(j, i))
+                            .into_iter()
+                            .flatten()
+                            .map(|&k| (k, -(p.cap - p.b[i] - p.b[j]))),
+                    );
+                    m.ge(a, p.b[j] - p.cap);
+                }
+            }
+        }
+    }
+
+    /// The charge on arrival at i covers the first leg out of i (R1.4).
+    fn reserve_rows(&mut self) {
+        let (p, y) = (self.p, self.y);
+        let (m, arcs, ci, out) = (&mut self.lp, &self.arcs, &self.ci, &self.out);
+        let first = |a: &(usize, Option<usize>, usize)| p.h * p.d[a.0][a.1.unwrap_or(a.2)];
+        for &i in &p.i {
+            let mut a = vec![(y + ci[&i], 1.0)];
+            a.extend(
+                out.get(&i)
+                    .into_iter()
+                    .flatten()
+                    .map(|&k| (k, -first(&arcs[k]))),
+            );
+            m.ge(a, 0.0);
+        }
+    }
+
+    /// Charge, partial-recharge (R3.1)-(R3.2) and time rows of arc k.
+    fn arc_rows(&mut self, k: usize) {
+        let (p, sc) = (self.p, self.sc);
+        let (o, h, big_q) = (p.o, p.h, p.q);
+        let (v, sig, t_max, tmin, pw) = (
+            sc.time.speed,
+            sc.time.service,
+            sc.time.t,
+            sc.time.tau_min,
+            sc.charger.p,
+        );
+        let (y, tt, q, tau) = (self.y, self.tt, self.q, self.tau);
+        let (m, ci, at) = (&mut self.lp, &self.ci, &self.at);
+        let (i, f, j) = self.arcs[k];
+        let tr = length(p, &self.arcs[k]) / v;
         match f {
             None => {
                 let e = h * p.d[i][j];
@@ -235,13 +289,22 @@ fn rows(p: &Instance, sc: &Recharge) -> Model {
             m.le(a, t_max + big - sig - tr);
         }
     }
+}
+
+fn rows(p: &Instance, sc: &Recharge) -> Model {
+    let mut b = Builder::new(p, sc);
+    b.capacity_rows();
+    b.reserve_rows();
+    for k in 0..b.arcs.len() {
+        b.arc_rows(k);
+    }
     Model {
-        lp: m,
-        arcs,
-        s,
-        q,
-        tau,
-        g,
+        lp: b.lp,
+        arcs: b.arcs,
+        s: b.s,
+        q: b.q,
+        tau: b.tau,
+        g: b.g,
     }
 }
 

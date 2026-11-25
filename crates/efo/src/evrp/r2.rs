@@ -29,7 +29,7 @@ use super::paths::{Path, paths};
 use super::replay::replay;
 use crate::cert::{Gap, Outcome, Record, gap, record};
 use crate::lp::Lp;
-use efo_kernels::price::{Arc, Graph};
+use efo_kernels::price::{Arc, Graph, Priced};
 use serde_json::json;
 use std::collections::{BTreeSet, HashSet};
 use std::time::Instant;
@@ -286,49 +286,68 @@ fn cut_duals(nn: usize, cuts: &[(BTreeSet<usize>, f64)], sigma: &[f64]) -> Optio
     })
 }
 
-/// Convert priced arc paths to unseen route columns in pricing order.
-fn fresh(
-    arcs: &[Path],
+/// The pricing graph with the arc paths it was built from, and keys, the node sequences of every
+/// column admitted to the master (so that pricing returns only unseen ones).
+struct Pricer {
+    g: Graph,
+    arcs: Vec<Path>,
     o: usize,
-    r: &efo_kernels::price::Priced,
-    keys: &HashSet<Vec<usize>>,
-) -> Vec<Col> {
-    let col = |c: &efo_kernels::price::Column| {
-        let a: Vec<&Path> = c.arcs.iter().map(|&e| &arcs[e]).collect();
-        Col {
-            cost: a.iter().map(|a| a.l).sum(),
-            visits: a[..a.len() - 1].iter().map(|a| a.j).collect(),
-            nodes: std::iter::once(o)
-                .chain(a.iter().flat_map(|a| a.nodes[1..].iter().copied()))
-                .collect(),
-        }
-    };
-    r.cols
-        .iter()
-        .map(col)
-        .filter(|c| !keys.contains(&c.nodes))
-        .collect::<Vec<_>>()
+    keys: HashSet<Vec<usize>>,
 }
 
-/// Run exact pricing only when capped labels find no unseen column.
-fn priced(
-    g: &Graph,
-    arcs: &[Path],
-    o: usize,
-    pi: &[f64],
-    w: Option<&[f64]>,
-    keys: &HashSet<Vec<usize>>,
-    labels: usize,
-    price_time: f64,
-    left: impl Fn() -> f64,
-) -> (Vec<Col>, Option<efo_kernels::price::Priced>) {
-    let heur = g.price(pi, w, Some(labels), left(), 1e-9, 0.0, 1000);
-    let new = fresh(arcs, o, &heur, keys);
-    if new.is_empty() && left() > 0.0 {
-        let r = g.price(pi, w, None, price_time.min(left()), 1e-9, 0.0, 1000);
-        (fresh(arcs, o, &r, keys), Some(r))
-    } else {
-        (new, None)
+impl Pricer {
+    /// Capped labels per heuristic call, and the seconds one exact call may take.
+    const LABELS: usize = 10;
+    const EXACT_TIME: f64 = 600.0;
+
+    fn new(p: &Instance, arcs: Vec<Path>, cols: &[Col]) -> Pricer {
+        Pricer {
+            g: graph(p, &arcs),
+            arcs,
+            o: p.o,
+            keys: cols.iter().map(|c| c.nodes.clone()).collect(),
+        }
+    }
+
+    /// Convert priced arc paths to unseen route columns in pricing order.
+    fn fresh(&self, r: &Priced) -> Vec<Col> {
+        let col = |c: &efo_kernels::price::Column| {
+            let a: Vec<&Path> = c.arcs.iter().map(|&e| &self.arcs[e]).collect();
+            Col {
+                cost: a.iter().map(|a| a.l).sum(),
+                visits: a[..a.len() - 1].iter().map(|a| a.j).collect(),
+                nodes: std::iter::once(self.o)
+                    .chain(a.iter().flat_map(|a| a.nodes[1..].iter().copied()))
+                    .collect(),
+            }
+        };
+        r.cols
+            .iter()
+            .map(col)
+            .filter(|c| !self.keys.contains(&c.nodes))
+            .collect::<Vec<_>>()
+    }
+
+    /// Unseen columns of least reduced cost for duals pi and cut duals w within the seconds left;
+    /// exact pricing runs, and its result is returned, only when capped labels find none.
+    fn price(
+        &self,
+        pi: &[f64],
+        w: Option<&[f64]>,
+        left: impl Fn() -> f64,
+    ) -> (Vec<Col>, Option<Priced>) {
+        let heur = self
+            .g
+            .price(pi, w, Some(Self::LABELS), left(), 1e-9, 0.0, 1000);
+        let new = self.fresh(&heur);
+        if new.is_empty() && left() > 0.0 {
+            let r = self
+                .g
+                .price(pi, w, None, Self::EXACT_TIME.min(left()), 1e-9, 0.0, 1000);
+            (self.fresh(&r), Some(r))
+        } else {
+            (new, None)
+        }
     }
 }
 
@@ -351,14 +370,13 @@ fn bound(
 
 /// R2 within time seconds, seeded with the replayed routes init (1-based).
 pub fn r2(p: &Instance, init: &[Vec<usize>], time: f64) -> Record {
-    let (eps, add, labels, price_time, max_iter) = (1e-6, 20, 10, 600.0_f64, 1000);
+    let (eps, add, max_iter) = (1e-6, 20, 1000);
     let t0 = Instant::now();
     let milp_time = (0.1 * time).min(300.0);
     let left = || (time - milp_time - t0.elapsed().as_secs_f64()).max(0.0);
     let arcs = paths(p);
-    let g = graph(p, &arcs);
     let mut cols = initial(p, &arcs, init);
-    let mut keys: HashSet<Vec<usize>> = cols.iter().map(|c| c.nodes.clone()).collect();
+    let mut pricer = Pricer::new(p, arcs, &cols);
     let (mut l, mut f, mut cuts) = (f64::NEG_INFINITY, f64::INFINITY, Vec::new());
     let (mut traj, mut calls, mut exact_calls, mut converged) = (Vec::new(), 0, 0, false);
     for k in 1..=max_iter {
@@ -368,17 +386,7 @@ pub fn r2(p: &Instance, init: &[Vec<usize>], time: f64) -> Record {
         let (fk, pi, lam, sigma) = master(p, &cols, &cuts, left().max(1e-3));
         f = fk;
         let w = cut_duals(p.x.len(), &cuts, &sigma);
-        let (new, exact_result) = priced(
-            &g,
-            &arcs,
-            p.o,
-            &pi,
-            w.as_deref(),
-            &keys,
-            labels,
-            price_time,
-            left,
-        );
+        let (new, exact_result) = pricer.price(&pi, w.as_deref(), left);
         calls += 1;
         let mut exact = false;
         if let Some(r) = exact_result {
@@ -387,7 +395,7 @@ pub fn r2(p: &Instance, init: &[Vec<usize>], time: f64) -> Record {
         }
         let quiet = new.is_empty();
         for c in new.into_iter().take(add) {
-            keys.insert(c.nodes.clone());
+            pricer.keys.insert(c.nodes.clone());
             cols.push(c);
         }
         let gk = if l.is_finite() {

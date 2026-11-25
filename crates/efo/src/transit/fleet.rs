@@ -50,6 +50,8 @@ pub struct Model<'a> {
     pub lp: Lp,
     pub slots: Vec<(usize, i64)>,
     pub sites: Vec<String>,
+    a: usize,
+    y: usize,
     pub x0: usize,
     pub x1: usize,
     pub xc: usize,
@@ -60,6 +62,7 @@ pub struct Model<'a> {
     pub o: usize,
     pub nn: usize,
     pub hh: usize,
+    dd: usize,
 }
 
 /// M1 (loss false) or the linear rows of M2 (loss true); fixed sets the plugs and upgrade of
@@ -161,19 +164,13 @@ pub fn rows<'a>(c: &'a Corridor, v: &'a Transit, fixed: &Infra, loss: bool) -> M
         );
         lp.le(vec![(r + i, 1.0), (x1 + i, -(m.s0b - m.rb))], 0.0);
     }
-    charging_rows(
-        &mut lp,
-        &m,
-        &slots,
-        &sites,
-        [a, y, p, u, o, nn, hh, dd, x0, xc],
-        g,
-    );
-    Model {
+    let mut md = Model {
         m,
         lp,
         slots,
         sites,
+        a,
+        y,
         x0,
         x1,
         xc,
@@ -184,102 +181,104 @@ pub fn rows<'a>(c: &'a Corridor, v: &'a Transit, fixed: &Infra, loss: bool) -> M
         o,
         nn,
         hh,
-    }
+        dd,
+    };
+    md.charging_rows();
+    md
 }
 
-/// Charging, presence and site-capacity rows, in the original matrix order.
-fn charging_rows(
-    lp: &mut Lp,
-    m: &Instance,
-    slots: &[(usize, i64)],
-    sites: &[String],
-    columns: [usize; 10],
-    g: Option<usize>,
-) {
-    let [a, y, p, u, o, nn, hh, dd, x0, xc] = columns;
-    let (c, v) = (m.c, m.v);
-    let n = c.trips.len();
-    let ch = &v.charger;
-    let (eta, pm, dt, h) = (ch.eta, ch.p, v.time.delta, v.time.delta / 3600.0);
-    let (_, w0, w1) = v.cost.tariff();
-    let gbar = pm / eta + ch.alpha * pm * pm;
-    let at: BTreeMap<(usize, i64), usize> =
-        slots.iter().enumerate().map(|(k, &jt)| (jt, k)).collect();
-    for j in 0..n {
-        let mut row = vec![(y + j, 1.0), (a + j, -1.0)]; // y_j = a_j + h sum p
-        row.extend(
-            m.win
-                .get(&j)
-                .into_iter()
-                .flatten()
-                .map(|&t| (p + at[&(j, t)], -h)),
+impl Model<'_> {
+    /// Charging, presence and site-capacity rows, in the original matrix order.
+    fn charging_rows(&mut self) {
+        let (a, y, p, u, o, nn, hh, dd, x0, xc, g) = (
+            self.a, self.y, self.p, self.u, self.o, self.nn, self.hh, self.dd, self.x0, self.xc,
+            self.g,
         );
-        lp.eq(row, 0.0);
-    }
-    let mut present: BTreeMap<usize, Vec<(f64, usize)>> = BTreeMap::new();
-    for (k, &(i, j, tau)) in m.arcs.iter().enumerate() {
-        present
-            .entry(j)
-            .or_default()
-            .push((c.trips[i].arr + tau, xc + k));
-    }
-    let mut by: BTreeMap<(usize, i64), Vec<usize>> = BTreeMap::new();
-    for (k, &(j, t)) in slots.iter().enumerate() {
-        lp.le(vec![(p + k, 1.0), (u + k, -pm)], 0.0); // (4)
-        let mut row = vec![(u + k, 1.0), (x0 + j, -1.0)];
-        row.extend(
-            present
-                .get(&j)
-                .into_iter()
-                .flatten()
-                .filter(|e| e.0 <= t as f64 * dt + 1e-9)
-                .map(|e| (e.1, -1.0)),
-        );
-        lp.le(row, 0.0);
-        let s = sites
-            .iter()
-            .position(|s| *s == m.site[&c.trips[j].first])
-            .unwrap();
-        by.entry((s, t)).or_default().push(k);
-    }
-    for (&(q, t), ks) in &by {
-        let d = &v.sites[&sites[q]]; // (5), (6) per slot
-        let mut row: Vec<(usize, f64)> = ks.iter().map(|&k| (u + k, 1.0)).collect();
-        row.push((nn + q, -1.0));
-        lp.le(row, 0.0);
-        let mut load: Vec<(usize, f64)> = ks
-            .iter()
-            .map(|&k| g.map_or((p + k, 1.0 / eta), |g| (g + k, 1.0)))
-            .collect();
-        if d.l != 0.0 {
-            load.push((o + q, d.l));
-        }
-        lp.le([load.clone(), vec![(hh + q, -1.0)]].concat(), d.g0);
-        if billed(t as f64 * dt, w0, w1) {
-            lp.le([load, vec![(dd + q, -1.0)]].concat(), 0.0);
-        }
-    }
-    for (q, s) in sites.iter().enumerate() {
-        let d = &v.sites[s];
-        lp.le(vec![(nn + q, 1.0), (o + q, -d.nbar)], 0.0);
-        lp.le(vec![(hh + q, 1.0), (o + q, -d.hbar)], 0.0);
-        if d.l != 0.0 {
-            lp.le(vec![(o + q, d.l), (hh + q, -1.0)], d.g0); // (6) per site
-            lp.le(vec![(o + q, d.l), (dd + q, -1.0)], 0.0);
-        }
-    }
-    if let Some(g) = g {
-        let bb = v.battery.b;
-        for (k, &(j, t)) in slots.iter().enumerate() {
-            lp.le(vec![(g + k, 1.0), (u + k, -gbar)], 0.0); // (10) bound, (11)
-            let mut row = vec![(p + k, 1.0), (a + j, pm / bb)];
+        let (m, slots, sites, lp) = (&self.m, &self.slots, &self.sites, &mut self.lp);
+        let (c, v) = (m.c, m.v);
+        let n = c.trips.len();
+        let ch = &v.charger;
+        let (eta, pm, dt, h) = (ch.eta, ch.p, v.time.delta, v.time.delta / 3600.0);
+        let (_, w0, w1) = v.cost.tariff();
+        let gbar = pm / eta + ch.alpha * pm * pm;
+        let at: BTreeMap<(usize, i64), usize> =
+            slots.iter().enumerate().map(|(k, &jt)| (jt, k)).collect();
+        for j in 0..n {
+            let mut row = vec![(y + j, 1.0), (a + j, -1.0)]; // y_j = a_j + h sum p
             row.extend(
-                m.win[&j]
-                    .iter()
-                    .filter(|&&s| s <= t)
-                    .map(|&s| (p + at[&(j, s)], pm * h / bb)),
+                m.win
+                    .get(&j)
+                    .into_iter()
+                    .flatten()
+                    .map(|&t| (p + at[&(j, t)], -h)),
             );
-            lp.le(row, pm);
+            lp.eq(row, 0.0);
+        }
+        let mut present: BTreeMap<usize, Vec<(f64, usize)>> = BTreeMap::new();
+        for (k, &(i, j, tau)) in m.arcs.iter().enumerate() {
+            present
+                .entry(j)
+                .or_default()
+                .push((c.trips[i].arr + tau, xc + k));
+        }
+        let mut by: BTreeMap<(usize, i64), Vec<usize>> = BTreeMap::new();
+        for (k, &(j, t)) in slots.iter().enumerate() {
+            lp.le(vec![(p + k, 1.0), (u + k, -pm)], 0.0); // (4)
+            let mut row = vec![(u + k, 1.0), (x0 + j, -1.0)];
+            row.extend(
+                present
+                    .get(&j)
+                    .into_iter()
+                    .flatten()
+                    .filter(|e| e.0 <= t as f64 * dt + 1e-9)
+                    .map(|e| (e.1, -1.0)),
+            );
+            lp.le(row, 0.0);
+            let s = sites
+                .iter()
+                .position(|s| *s == m.site[&c.trips[j].first])
+                .unwrap();
+            by.entry((s, t)).or_default().push(k);
+        }
+        for (&(q, t), ks) in &by {
+            let d = &v.sites[&sites[q]]; // (5), (6) per slot
+            let mut row: Vec<(usize, f64)> = ks.iter().map(|&k| (u + k, 1.0)).collect();
+            row.push((nn + q, -1.0));
+            lp.le(row, 0.0);
+            let mut load: Vec<(usize, f64)> = ks
+                .iter()
+                .map(|&k| g.map_or((p + k, 1.0 / eta), |g| (g + k, 1.0)))
+                .collect();
+            if d.l != 0.0 {
+                load.push((o + q, d.l));
+            }
+            lp.le([load.clone(), vec![(hh + q, -1.0)]].concat(), d.g0);
+            if billed(t as f64 * dt, w0, w1) {
+                lp.le([load, vec![(dd + q, -1.0)]].concat(), 0.0);
+            }
+        }
+        for (q, s) in sites.iter().enumerate() {
+            let d = &v.sites[s];
+            lp.le(vec![(nn + q, 1.0), (o + q, -d.nbar)], 0.0);
+            lp.le(vec![(hh + q, 1.0), (o + q, -d.hbar)], 0.0);
+            if d.l != 0.0 {
+                lp.le(vec![(o + q, d.l), (hh + q, -1.0)], d.g0); // (6) per site
+                lp.le(vec![(o + q, d.l), (dd + q, -1.0)], 0.0);
+            }
+        }
+        if let Some(g) = g {
+            let bb = v.battery.b;
+            for (k, &(j, t)) in slots.iter().enumerate() {
+                lp.le(vec![(g + k, 1.0), (u + k, -gbar)], 0.0); // (10) bound, (11)
+                let mut row = vec![(p + k, 1.0), (a + j, pm / bb)];
+                row.extend(
+                    m.win[&j]
+                        .iter()
+                        .filter(|&&s| s <= t)
+                        .map(|&s| (p + at[&(j, s)], pm * h / bb)),
+                );
+                lp.le(row, pm);
+            }
         }
     }
 }
